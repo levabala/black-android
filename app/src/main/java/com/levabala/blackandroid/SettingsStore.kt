@@ -21,6 +21,10 @@ class SettingsStore(context: Context) {
         }.getOrDefault(Appearance.SYSTEM)
         set(value) = prefs.edit().putString("appearance", value.name).apply()
 
+    var updateResult: String?
+        get() = prefs.getString("updateResult", null)
+        set(value) = prefs.edit().putString("updateResult", value).apply()
+
     fun load(): BlackSettings = BlackSettings(
         intervalMillis = prefs.getLong("intervalMillis", 20 * 60 * 1000L),
         warningMillis = prefs.getLong("warningMillis", 10 * 1000L).coerceAtLeast(10 * 1000L),

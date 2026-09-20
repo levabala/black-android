@@ -15,6 +15,7 @@ The app uses a foreground service and an Android application overlay. Android ma
 
 - **Start** saves the settings and begins a full interval. **Stop** ends the service. **Save settings** restarts the interval with the new values. **Test now** starts the warning immediately.
 - **Appearance** offers System, Light, and Dark themes. System follows the phone's appearance setting; the other choices override it for Black.
+- **Check for updates** reads the public GitHub Releases list, including previews. When a newer Black APK is available, it downloads it, verifies its checksum, package name, version, and signing certificate, then opens Android's installation confirmation. The first update may require allowing installs from Black in Android settings.
 - The warning has a **Cancel blackout** button. With notifications enabled, a high-importance notification appears about 10 seconds before the blackout with a **Cancel** action. Three quick taps on the black screen cancel an active blackout. Canceling starts a fresh interval.
 - The countdown pauses while another app records audio. If recording begins during a warning or blackout, that sequence is dismissed; a full interval begins when recording ends.
 - Locking or turning off the screen pauses the countdown and dismisses an active warning or blackout. Unlocking within one minute resumes the remaining countdown; after one minute, it starts a full interval.
@@ -25,6 +26,10 @@ The app uses a foreground service and an Android application overlay. Android ma
 Black uses separate Android notification channels: **Black schedule** for the required running-service card and **Blackout warnings** for the final Cancel alert. In the phone's **Settings → Apps → Black → Notifications**, some devices let you silence or turn off only **Black schedule** while leaving **Blackout warnings** enabled. Android can still list the foreground service under **Active apps**. Disabling all Black notifications also hides the Cancel alert.
 
 An alarm-based schedule could avoid the running-service card, but Android requires exact-alarm access on many devices, and the app could no longer continuously detect microphone use between alarms.
+
+## APK updates
+
+The in-app updater expects a public release tagged like `v1.0.5` with an asset named `black-android-v1.0.5-debug.apk` or `black-android-v1.0.5.apk`. Increment both `versionCode` and `versionName` for each APK. Android requires the new APK to use the same signing key as the installed one; the updater checks this before opening the installer. These preview releases use a debug signing key, so builds from a different machine or a regenerated debug key cannot update an existing installation. Android always shows its own installation confirmation.
 
 ## Build notes
 

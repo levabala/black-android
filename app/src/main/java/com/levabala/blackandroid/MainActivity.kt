@@ -2,6 +2,7 @@ package com.levabala.blackandroid
 
 import android.Manifest
 import android.app.Activity
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -24,6 +25,7 @@ import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import java.io.File
 
 class MainActivity : Activity() {
     private lateinit var store: SettingsStore
@@ -34,6 +36,9 @@ class MainActivity : Activity() {
     private lateinit var warning: EditText
     private lateinit var blackout: EditText
     private lateinit var pauseMic: Switch
+    private lateinit var updateButton: Button
+    private lateinit var updateStatus: TextView
+    private var pendingInstallerPermission = false
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
         override fun run() {
@@ -61,6 +66,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingInstallerPermission = savedInstanceState?.getBoolean("pendingInstallerPermission") ?: false
         store = SettingsStore(this)
         val saved = store.load()
         val root = LinearLayout(this).apply {
@@ -141,6 +147,88 @@ class MainActivity : Activity() {
                 moveTaskToBack(true)
             }
         }
+        updateStatus = TextView(this).apply {
+            text = "Updates are downloaded from GitHub Releases."
+            setPadding(0, dp(18), 0, dp(6))
+        }
+        root.addView(updateStatus)
+        updateButton = button(root, "Check for updates") { checkForUpdates() }
+    }
+
+    private fun checkForUpdates() {
+        updateButton.isEnabled = false
+        updateStatus.text = "Checking GitHub Releases…"
+        val updater = AppUpdater(applicationContext)
+        Thread {
+            try {
+                val release = updater.latestUpdate()
+                if (release == null) {
+                    runOnUiThread {
+                        if (!isDestroyed) {
+                            updateStatus.text = "Black is up to date."
+                            updateButton.isEnabled = true
+                        }
+                    }
+                    return@Thread
+                }
+                runOnUiThread {
+                    if (!isDestroyed) updateStatus.text = "Downloading Black ${release.version}…"
+                }
+                updater.downloadAndVerify(release)
+                runOnUiThread {
+                    if (!isDestroyed) {
+                        updateStatus.text = "Black ${release.version} is ready to install."
+                        installDownloadedUpdate()
+                    }
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    if (!isDestroyed) {
+                        updateStatus.text = "Update failed: ${error.message ?: "unknown error"}"
+                        updateButton.isEnabled = true
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun installDownloadedUpdate() {
+        val file = File(cacheDir, "black-update.apk")
+        if (!file.isFile) {
+            updateStatus.text = "The downloaded APK is gone. Check for updates again."
+            updateButton.isEnabled = true
+            return
+        }
+        if (!packageManager.canRequestPackageInstalls()) {
+            pendingInstallerPermission = true
+            updateStatus.text = "Allow installs from Black in Android settings, then return here."
+            startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:$packageName")))
+            return
+        }
+        pendingInstallerPermission = false
+        updateStatus.text = "Preparing Android's installer…"
+        val callback = PendingIntent.getActivity(this, INSTALL_UPDATE_REQUEST,
+            Intent(this, UpdateInstallActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+        val updater = AppUpdater(applicationContext)
+        Thread {
+            try {
+                updater.stageInstall(file, callback.intentSender)
+            } catch (error: Exception) {
+                runOnUiThread {
+                    if (!isDestroyed) {
+                        updateStatus.text = "Could not start installation: ${error.message ?: "unknown error"}"
+                        updateButton.isEnabled = true
+                    }
+                }
+            }
+        }.start()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("pendingInstallerPermission", pendingInstallerPermission)
+        super.onSaveInstanceState(outState)
     }
 
     private fun saveSettings(): Boolean {
@@ -187,6 +275,20 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         handler.post(refresh)
+        store.updateResult?.let {
+            updateStatus.text = it
+            updateButton.isEnabled = true
+            store.updateResult = null
+        }
+        if (pendingInstallerPermission) {
+            pendingInstallerPermission = false
+            if (packageManager.canRequestPackageInstalls()) {
+                installDownloadedUpdate()
+            } else {
+                updateStatus.text = "Allow installs from Black to install the downloaded update."
+                updateButton.isEnabled = true
+            }
+        }
     }
 
     override fun onPause() {
@@ -195,4 +297,8 @@ class MainActivity : Activity() {
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    private companion object {
+        const val INSTALL_UPDATE_REQUEST = 2
+    }
 }

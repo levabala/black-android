@@ -178,6 +178,10 @@ def main():
 
     wait_node(lambda node: node.attrib.get("text") == "Appearance", "Appearance setting")
     capture("00-system-theme.png", "System theme", current_status() or "Stopped")
+    command("shell", "input", "swipe", "540", "1800", "540", "700", "350")
+    wait_node(lambda node: node.attrib.get("text", "").casefold() == "check for updates", "Update control")
+    capture("00-update-control.png", "In-app update control", current_status() or "Stopped")
+    command("shell", "input", "swipe", "540", "700", "540", "1800", "350")
     spinners = [node for node in ui().iter() if node.attrib.get("class") == "android.widget.Spinner"]
     if len(spinners) != 2:
         raise RuntimeError(f"Expected appearance and interval selectors, found {len(spinners)}")
