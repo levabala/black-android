@@ -30,6 +30,7 @@ class BlackService : Service() {
     private lateinit var notifications: NotificationManager
     private var lastPhase: Phase? = null
     private var lastStatus = ""
+    private var warningNotificationSent = false
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -77,6 +78,9 @@ class BlackService : Service() {
         notifications = getSystemService(NotificationManager::class.java)
         notifications.createNotificationChannel(
             NotificationChannel(CHANNEL, "Black schedule", NotificationManager.IMPORTANCE_LOW)
+        )
+        notifications.createNotificationChannel(
+            NotificationChannel(WARNING_CHANNEL, "Blackout warnings", NotificationManager.IMPORTANCE_HIGH)
         )
         registerReceiver(screenReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -137,6 +141,13 @@ class BlackService : Service() {
             store.status = status
             lastStatus = status
         }
+        if (timer.phase == Phase.WARNING && timer.remainingMillis(now) <= 10_000 && !warningNotificationSent) {
+            notifications.notify(WARNING_NOTIFICATION_ID, warningNotification())
+            warningNotificationSent = true
+        } else if (timer.phase != Phase.WARNING && warningNotificationSent) {
+            notifications.cancel(WARNING_NOTIFICATION_ID)
+            warningNotificationSent = false
+        }
         if (timer.phase != lastPhase) {
             notifications.notify(NOTIFICATION_ID, notification(status))
             lastPhase = timer.phase
@@ -163,11 +174,28 @@ class BlackService : Service() {
         return builder.build()
     }
 
+    private fun warningNotification(): Notification {
+        val open = PendingIntent.getActivity(this, 3, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val cancel = PendingIntent.getService(this, 2, command(this, ACTION_CANCEL),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        return Notification.Builder(this, WARNING_CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle("Blackout in 10 seconds")
+            .setContentText("Tap Cancel to skip this blackout")
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .addAction(Notification.Action.Builder(null, "Cancel", cancel).build())
+            .build()
+    }
+
     override fun onDestroy() {
         handler.removeCallbacks(ticker)
         audio.unregisterAudioRecordingCallback(recordingCallback)
         unregisterReceiver(screenReceiver)
         overlay.remove()
+        notifications.cancel(WARNING_NOTIFICATION_ID)
         timer.stop()
         super.onDestroy()
     }
@@ -176,7 +204,9 @@ class BlackService : Service() {
 
     companion object {
         private const val CHANNEL = "black_schedule"
+        private const val WARNING_CHANNEL = "black_warning"
         private const val NOTIFICATION_ID = 1
+        private const val WARNING_NOTIFICATION_ID = 2
         const val ACTION_START = "com.levabala.blackandroid.START"
         const val ACTION_STOP = "com.levabala.blackandroid.STOP"
         const val ACTION_UPDATE = "com.levabala.blackandroid.UPDATE"

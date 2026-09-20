@@ -15,7 +15,7 @@ class SettingsStore(context: Context) {
 
     fun load(): BlackSettings = BlackSettings(
         intervalMillis = prefs.getLong("intervalMillis", 20 * 60 * 1000L),
-        warningMillis = prefs.getLong("warningMillis", 10 * 1000L),
+        warningMillis = prefs.getLong("warningMillis", 10 * 1000L).coerceAtLeast(10 * 1000L),
         blackoutMillis = prefs.getLong("blackoutMillis", 20 * 1000L),
         pauseForMicrophone = prefs.getBoolean("pauseForMicrophone", true),
         resetAfterLock = prefs.getBoolean("resetAfterLock", true),

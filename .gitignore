@@ -2,6 +2,9 @@
 .idea/
 .kotlin/
 .tools/
+artifacts/
+__pycache__/
+*.pyc
 local.properties
 build/
 app/build/

@@ -11,10 +11,13 @@ import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
 import android.view.ViewGroup
+import android.view.WindowInsetsController
 import android.widget.Button
+import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -24,6 +27,7 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var startStop: Button
     private lateinit var interval: EditText
+    private lateinit var intervalUnit: Spinner
     private lateinit var warning: EditText
     private lateinit var blackout: EditText
     private lateinit var pauseMic: Switch
@@ -39,6 +43,10 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.decorView.windowInsetsController?.setSystemBarsAppearance(
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+        )
         store = SettingsStore(this)
         val saved = store.load()
         val root = LinearLayout(this).apply {
@@ -52,7 +60,14 @@ class MainActivity : Activity() {
         status = TextView(this).apply { textSize = 18f; setPadding(0, dp(12), 0, dp(18)) }
         root.addView(status)
 
-        interval = numberField(root, "Interval (minutes)", saved.intervalMillis / 60_000)
+        val intervalIsMinutes = saved.intervalMillis % 60_000L == 0L
+        interval = numberField(root, "Interval", if (intervalIsMinutes) saved.intervalMillis / 60_000 else saved.intervalMillis / 1_000)
+        intervalUnit = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("Minutes", "Seconds"))
+            setSelection(if (intervalIsMinutes) 0 else 1)
+        }
+        root.addView(intervalUnit)
         warning = numberField(root, "Warning (seconds)", saved.warningMillis / 1_000)
         blackout = numberField(root, "Blackout (seconds)", saved.blackoutMillis / 1_000)
         pauseMic = Switch(this).apply { text = "Pause while microphone is in use"; isChecked = saved.pauseForMicrophone }
@@ -98,15 +113,17 @@ class MainActivity : Activity() {
     }
 
     private fun saveSettings(): Boolean {
-        val minutes = interval.text.toString().toLongOrNull()
+        val intervalValue = interval.text.toString().toLongOrNull()
         val warningSeconds = warning.text.toString().toLongOrNull()
         val blackoutSeconds = blackout.text.toString().toLongOrNull()
-        if (minutes == null || minutes !in 1..1440 || warningSeconds == null || warningSeconds !in 1..300 ||
+        val intervalLimit = if (intervalUnit.selectedItemPosition == 0) 1440L else 86_400L
+        if (intervalValue == null || intervalValue !in 1..intervalLimit || warningSeconds == null || warningSeconds !in 10..300 ||
             blackoutSeconds == null || blackoutSeconds !in 1..300) {
-            Toast.makeText(this, "Use 1–1440 minutes and 1–300 seconds", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Use 1–1440 minutes or 1–86400 seconds, a 10–300 second warning, and a 1–300 second blackout", Toast.LENGTH_LONG).show()
             return false
         }
-        store.save(BlackSettings(minutes * 60_000, warningSeconds * 1_000,
+        val intervalMillis = intervalValue * if (intervalUnit.selectedItemPosition == 0) 60_000L else 1_000L
+        store.save(BlackSettings(intervalMillis, warningSeconds * 1_000,
             blackoutSeconds * 1_000, pauseMic.isChecked, resetLock.isChecked))
         return true
     }
