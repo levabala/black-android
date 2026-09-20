@@ -37,15 +37,42 @@ class SchedulerCoreTest {
         assertEquals(20_000, timer.remainingMillis(100_000))
     }
 
-    @Test fun unlockStartsFreshIntervalAndBootCanStartLocked() {
+    @Test fun shortLockPreservesRemainingCountdownAndBootCanStartLocked() {
         val timer = SchedulerCore(settings)
         timer.start(0, false, false)
         assertEquals(Phase.LOCKED, timer.phase)
         timer.setScreenAvailable(true, 30_000)
         assertEquals(20_000, timer.remainingMillis(30_000))
         timer.setScreenAvailable(false, 35_000)
-        timer.setScreenAvailable(true, 60_000)
-        assertEquals(20_000, timer.remainingMillis(60_000))
+        assertEquals(15_000, timer.remainingMillis(60_000))
+        timer.setScreenAvailable(true, 94_999)
+        assertEquals(15_000, timer.remainingMillis(94_999))
+        timer.tick(109_999)
+        assertEquals(Phase.WARNING, timer.phase)
+    }
+
+    @Test fun oneMinuteLockStartsFreshInterval() {
+        val timer = SchedulerCore(settings)
+        timer.start(0, true, false)
+        timer.setScreenAvailable(false, 5_000)
+        assertEquals(15_000, timer.remainingMillis(64_999))
+        timer.tick(65_000)
+        assertEquals(20_000, timer.remainingMillis(65_000))
+        timer.setScreenAvailable(true, 65_000)
+        assertEquals(20_000, timer.remainingMillis(65_000))
+        timer.tick(80_000)
+        assertEquals(Phase.COUNTDOWN, timer.phase)
+    }
+
+    @Test fun shortLockAlsoPreservesMicrophonePausedCountdown() {
+        val timer = SchedulerCore(settings)
+        timer.start(0, true, false)
+        timer.setMicrophoneActive(true, 5_000)
+        timer.setScreenAvailable(false, 6_000)
+        timer.setScreenAvailable(true, 20_000)
+        assertEquals(Phase.MIC_PAUSED, timer.phase)
+        timer.setMicrophoneActive(false, 25_000)
+        assertEquals(15_000, timer.remainingMillis(25_000))
     }
 
     @Test fun testNowHonorsMicrophonePause() {
@@ -68,12 +95,14 @@ class SchedulerCoreTest {
         assertEquals(19_000, timer.remainingMillis(52_000))
     }
 
-    @Test fun optionalLockSettingPreservesRemainingCountdown() {
-        val timer = SchedulerCore(settings.copy(resetAfterLock = false))
-        timer.start(1_000, true, false)
-        timer.setScreenAvailable(false, 6_000)
-        timer.setScreenAvailable(true, 100_000)
-        assertEquals(15_000, timer.remainingMillis(100_000))
+    @Test fun interruptedWarningIsDismissedOnLock() {
+        val timer = SchedulerCore(settings)
+        timer.start(0, true, false)
+        timer.tick(20_000)
+        timer.setScreenAvailable(false, 21_000)
+        timer.setScreenAvailable(true, 30_000)
+        assertEquals(Phase.COUNTDOWN, timer.phase)
+        assertEquals(20_000, timer.remainingMillis(30_000))
     }
 
     @Test fun shortIntervalSupportsFastManualCycles() {

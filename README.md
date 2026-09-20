@@ -2,7 +2,7 @@
 
 Black runs a recurring on-screen blackout timer on Android 14 (API 34) and newer. The defaults match the Mac app: every 20 minutes it shows a 10 second warning, followed by a 20 second blackout. The interval can be set in minutes or seconds; warning and blackout durations can also be changed in the app.
 
-The app uses a foreground service and an Android application overlay. Android may keep system bars, permission screens, and the keyboard visible above the overlay. The ongoing notification is part of running the timer.
+The app uses a foreground service and an Android application overlay. Android may keep system bars, permission screens, and the keyboard visible above the overlay. The ongoing "Timer running" notification is required while the service monitors the timer and microphone. The separate Cancel alert appears only during the last 10 seconds before blackout and is removed when the warning ends.
 
 ## Install
 
@@ -16,7 +16,7 @@ The app uses a foreground service and an Android application overlay. Android ma
 - **Start** saves the settings and begins a full interval. **Stop** ends the service. **Save settings** restarts the interval with the new values. **Test now** starts the warning immediately.
 - The warning has a **Cancel blackout** button. With notifications enabled, a high-importance notification appears about 10 seconds before the blackout with a **Cancel** action. Three quick taps on the black screen cancel an active blackout. Canceling starts a fresh interval.
 - The countdown pauses while another app records audio. If recording begins during a warning or blackout, that sequence is dismissed; a full interval begins when recording ends.
-- Locking or turning off the screen dismisses an active sequence. Unlocking starts a full interval by default. The optional setting can preserve the remaining countdown instead.
+- Locking or turning off the screen pauses the countdown and dismisses an active warning or blackout. Unlocking within one minute resumes the remaining countdown; after one minute, it starts a full interval.
 - If the schedule was enabled, Android restarts it after a reboot or app update. Force-stop and some device battery restrictions can prevent this. If overlay permission is revoked, the service stops and the app shows that permission is needed.
 
 ## Build notes

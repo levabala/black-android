@@ -7,7 +7,6 @@ data class BlackSettings(
     val warningMillis: Long = 10 * 1000L,
     val blackoutMillis: Long = 20 * 1000L,
     val pauseForMicrophone: Boolean = true,
-    val resetAfterLock: Boolean = true,
 )
 
 enum class Phase {
@@ -21,6 +20,10 @@ enum class Phase {
 
 /** The timer uses elapsed realtime, so wall clock changes cannot move a blackout. */
 class SchedulerCore(initialSettings: BlackSettings) {
+    private companion object {
+        const val LOCK_RESET_MILLIS = 60_000L
+    }
+
     var settings: BlackSettings = initialSettings
         private set
 
@@ -33,10 +36,12 @@ class SchedulerCore(initialSettings: BlackSettings) {
     private var savedRemainingMillis = initialSettings.intervalMillis
     private var microphoneActive = false
     private var screenAvailable = true
+    private var lockedAtMillis: Long? = null
 
     fun start(now: Long, screenAvailable: Boolean, microphoneActive: Boolean) {
         this.screenAvailable = screenAvailable
         this.microphoneActive = microphoneActive
+        lockedAtMillis = if (screenAvailable) null else now
         savedRemainingMillis = settings.intervalMillis
         phase = when {
             !screenAvailable -> Phase.LOCKED
@@ -49,6 +54,7 @@ class SchedulerCore(initialSettings: BlackSettings) {
     fun stop() {
         phase = Phase.STOPPED
         deadlineMillis = 0
+        lockedAtMillis = null
     }
 
     fun updateSettings(newSettings: BlackSettings, now: Long) {
@@ -86,20 +92,27 @@ class SchedulerCore(initialSettings: BlackSettings) {
 
         if (!available) {
             savedRemainingMillis = when {
-                settings.resetAfterLock -> settings.intervalMillis
                 phase == Phase.COUNTDOWN -> max(0, deadlineMillis - now)
                 phase == Phase.MIC_PAUSED -> savedRemainingMillis
                 else -> settings.intervalMillis
             }
+            lockedAtMillis = now
             phase = Phase.LOCKED
             deadlineMillis = 0
         } else {
+            if (lockedAtMillis?.let { now - it >= LOCK_RESET_MILLIS } == true) {
+                savedRemainingMillis = settings.intervalMillis
+            }
+            lockedAtMillis = null
             phase = if (settings.pauseForMicrophone && microphoneActive) Phase.MIC_PAUSED else Phase.COUNTDOWN
             deadlineMillis = if (phase == Phase.COUNTDOWN) now + savedRemainingMillis else 0
         }
     }
 
     fun tick(now: Long) {
+        if (phase == Phase.LOCKED && lockedAtMillis?.let { now - it >= LOCK_RESET_MILLIS } == true) {
+            savedRemainingMillis = settings.intervalMillis
+        }
         while (deadlineMillis != 0L && now >= deadlineMillis) {
             val previousDeadline = deadlineMillis
             phase = when (phase) {
@@ -140,7 +153,7 @@ class SchedulerCore(initialSettings: BlackSettings) {
 
     fun remainingMillis(now: Long): Long = when (phase) {
         Phase.COUNTDOWN, Phase.WARNING, Phase.BLACKOUT -> max(0, deadlineMillis - now)
-        Phase.MIC_PAUSED -> savedRemainingMillis
+        Phase.MIC_PAUSED, Phase.LOCKED -> savedRemainingMillis
         else -> 0
     }
 }

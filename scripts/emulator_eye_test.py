@@ -95,6 +95,13 @@ def wait_status(prefix, timeout=30):
     raise RuntimeError(f"Expected status starting with {prefix!r}; last status: {current_status()!r}")
 
 
+def status_seconds(status):
+    match = re.search(r"(\d+):(\d{2})", status)
+    if not match:
+        raise RuntimeError(f"Status has no timer: {status!r}")
+    return int(match.group(1)) * 60 + int(match.group(2))
+
+
 def capture(filename, label, status):
     path = OUTPUT / filename
     path.write_bytes(command("exec-out", "screencap", "-p", text=False))
@@ -114,6 +121,15 @@ def wait_warning_notification(timeout=20):
             return
         time.sleep(0.4)
     raise RuntimeError("The 10-second warning notification was not posted")
+
+
+def wait_warning_notification_gone(timeout=5):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if not warning_notification_active():
+            return
+        time.sleep(0.3)
+    raise RuntimeError("The 10-second warning notification remained after cancellation")
 
 
 def write_gallery():
@@ -154,9 +170,14 @@ def main():
         raise RuntimeError(f"Timer fields were not set correctly: {values[:3]}")
     tap_text("START")
     capture("01-countdown.png", "Countdown with 8-second interval", wait_status("Next warning"))
+    if warning_notification_active():
+        raise RuntimeError("The 10-second warning notification appeared during countdown")
     command("shell", "input", "keyevent", "KEYCODE_HOME")
 
-    capture("02-warning.png", "Warning overlay over home screen", wait_status("Blackout in", 20))
+    warning_status = wait_status("Blackout in", 20)
+    if status_seconds(warning_status) > 10 and warning_notification_active():
+        raise RuntimeError(f"The warning notification appeared too early: {warning_status!r}")
+    capture("02-warning.png", "Warning overlay over home screen", warning_status)
     wait_warning_notification(18)
     command("shell", "cmd", "statusbar", "expand-notifications")
     time.sleep(0.8)
@@ -165,15 +186,23 @@ def main():
     command("shell", "cmd", "statusbar", "collapse")
     time.sleep(0.5)
     capture("04-notification-cancel.png", "Notification action restarted countdown", wait_status("Next warning", 5))
+    wait_warning_notification_gone()
 
     capture("05-blackout.png", "Blackout overlay", wait_status("Blackout:", 45))
+    wait_warning_notification_gone()
     command("shell", "input tap 540 1100; sleep 0.2; input tap 540 1100; sleep 0.2; input tap 540 1100")
     capture("06-three-taps.png", "Three taps restarted countdown", wait_status("Next warning", 5))
 
     command("shell", "input", "keyevent", "26")
-    wait_status("Paused while locked", 5)
+    locked_status = wait_status("Paused while locked", 5)
+    locked_remaining = status_seconds(locked_status)
+    if not 0 < locked_remaining < 8:
+        raise RuntimeError(f"Expected an in-progress countdown when locked: {locked_status!r}")
     command("shell", "input", "keyevent", "26")
-    capture("07-after-wake.png", "Screen wake restarted countdown", wait_status("Next warning", 5))
+    wake_status = wait_status("Next warning", 5)
+    if status_seconds(wake_status) > locked_remaining:
+        raise RuntimeError(f"Short lock reset the countdown: {locked_status!r} -> {wake_status!r}")
+    capture("07-after-wake.png", "Screen wake resumed countdown", wake_status)
 
     if INCLUDE_REBOOT:
         command("reboot")

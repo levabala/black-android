@@ -31,7 +31,6 @@ class MainActivity : Activity() {
     private lateinit var warning: EditText
     private lateinit var blackout: EditText
     private lateinit var pauseMic: Switch
-    private lateinit var resetLock: Switch
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
         override fun run() {
@@ -71,9 +70,7 @@ class MainActivity : Activity() {
         warning = numberField(root, "Warning (seconds)", saved.warningMillis / 1_000)
         blackout = numberField(root, "Blackout (seconds)", saved.blackoutMillis / 1_000)
         pauseMic = Switch(this).apply { text = "Pause while microphone is in use"; isChecked = saved.pauseForMicrophone }
-        resetLock = Switch(this).apply { text = "Reset timer after lock and unlock"; isChecked = saved.resetAfterLock }
         root.addView(pauseMic)
-        root.addView(resetLock)
 
         val explanation = TextView(this).apply {
             text = "The blackout covers app content. Android may keep system bars and the keyboard visible. Tap the blackout three times quickly to dismiss it."
@@ -124,7 +121,7 @@ class MainActivity : Activity() {
         }
         val intervalMillis = intervalValue * if (intervalUnit.selectedItemPosition == 0) 60_000L else 1_000L
         store.save(BlackSettings(intervalMillis, warningSeconds * 1_000,
-            blackoutSeconds * 1_000, pauseMic.isChecked, resetLock.isChecked))
+            blackoutSeconds * 1_000, pauseMic.isChecked))
         return true
     }
 

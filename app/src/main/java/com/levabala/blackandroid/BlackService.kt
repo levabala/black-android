@@ -99,7 +99,7 @@ class BlackService : Service() {
         }
 
         // startForeground must be called promptly, including after a system restart.
-        startForeground(NOTIFICATION_ID, notification("Running"), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         val now = SystemClock.elapsedRealtime()
         if (timer.phase == Phase.STOPPED) {
             val power = getSystemService(PowerManager::class.java)
@@ -135,13 +135,13 @@ class BlackService : Service() {
             Phase.WARNING -> "Blackout in ${formatTime(timer.remainingMillis(now))}"
             Phase.BLACKOUT -> "Blackout: ${formatTime(timer.remainingMillis(now))} left"
             Phase.MIC_PAUSED -> "Paused for microphone"
-            Phase.LOCKED -> "Paused while locked"
+            Phase.LOCKED -> "Paused while locked: ${formatTime(timer.remainingMillis(now))} left"
         }
         if (status != lastStatus) {
             store.status = status
             lastStatus = status
         }
-        if (timer.phase == Phase.WARNING && timer.remainingMillis(now) <= 10_000 && !warningNotificationSent) {
+        if (timer.phase == Phase.WARNING && timer.remainingMillis(now) < 10_000 && !warningNotificationSent) {
             notifications.notify(WARNING_NOTIFICATION_ID, warningNotification())
             warningNotificationSent = true
         } else if (timer.phase != Phase.WARNING && warningNotificationSent) {
@@ -149,12 +149,12 @@ class BlackService : Service() {
             warningNotificationSent = false
         }
         if (timer.phase != lastPhase) {
-            notifications.notify(NOTIFICATION_ID, notification(status))
+            notifications.notify(NOTIFICATION_ID, notification())
             lastPhase = timer.phase
         }
     }
 
-    private fun notification(status: String): Notification {
+    private fun notification(): Notification {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1, command(this, ACTION_STOP),
@@ -162,15 +162,10 @@ class BlackService : Service() {
         val builder = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Black")
-            .setContentText(status)
+            .setContentText("Timer running")
             .setContentIntent(open)
             .setOngoing(true)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build())
-        if (timer.phase == Phase.WARNING) {
-            val cancel = PendingIntent.getService(this, 2, command(this, ACTION_CANCEL),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            builder.addAction(Notification.Action.Builder(null, "Cancel", cancel).build())
-        }
         return builder.build()
     }
 
