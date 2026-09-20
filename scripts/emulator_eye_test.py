@@ -85,6 +85,24 @@ def current_status():
         return ""
 
 
+def current_appearance():
+    raw = command("shell", "run-as", PACKAGE, "cat", "shared_prefs/black.xml", check=False)
+    try:
+        root = ET.fromstring(raw)
+        return next((node.text or "") for node in root if node.attrib.get("name") == "appearance")
+    except (ET.ParseError, StopIteration):
+        return ""
+
+
+def wait_appearance(expected, timeout=5):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if current_appearance() == expected:
+            return
+        time.sleep(0.2)
+    raise RuntimeError(f"Appearance {expected!r} was not saved; got {current_appearance()!r}")
+
+
 def wait_status(prefix, timeout=30):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
@@ -158,8 +176,19 @@ def main():
     command("shell", "cmd", "statusbar", "collapse")
     command("shell", "am", "start", "-n", ACTIVITY)
 
-    spinner = wait_node(lambda node: node.attrib.get("class") == "android.widget.Spinner", "Interval unit selector")
-    tap_node(spinner)
+    wait_node(lambda node: node.attrib.get("text") == "Appearance", "Appearance setting")
+    capture("00-system-theme.png", "System theme", current_status() or "Stopped")
+    spinners = [node for node in ui().iter() if node.attrib.get("class") == "android.widget.Spinner"]
+    if len(spinners) != 2:
+        raise RuntimeError(f"Expected appearance and interval selectors, found {len(spinners)}")
+    tap_node(spinners[0])
+    tap_text("Dark")
+    wait_appearance("DARK")
+    wait_node(lambda node: node.attrib.get("text") == "Appearance", "Dark theme activity")
+    capture("00-dark-theme.png", "Dark theme", current_status() or "Stopped")
+
+    spinners = [node for node in ui().iter() if node.attrib.get("class") == "android.widget.Spinner"]
+    tap_node(spinners[1])
     tap_text("Seconds")
     set_number(0, 8)
     set_number(1, 18)
@@ -214,8 +243,8 @@ def main():
             time.sleep(1)
         capture("08-after-reboot.png", "Enabled service resumed after reboot", wait_status("Next warning", 30))
 
-    command("shell", "am", "start", "-n", ACTIVITY)
-    tap_text("STOP")
+    command("shell", "run-as", PACKAGE, "am", "startservice", "--user", "0",
+            "-n", f"{PACKAGE}/.BlackService", "-a", f"{PACKAGE}.STOP")
     wait_status("Stopped", 5)
     write_gallery()
     print(f"Eye test passed. Open {OUTPUT / 'index.html'} to review screenshots.")

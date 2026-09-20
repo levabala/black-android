@@ -14,10 +14,17 @@ The app uses a foreground service and an Android application overlay. Android ma
 ## Controls and behavior
 
 - **Start** saves the settings and begins a full interval. **Stop** ends the service. **Save settings** restarts the interval with the new values. **Test now** starts the warning immediately.
+- **Appearance** offers System, Light, and Dark themes. System follows the phone's appearance setting; the other choices override it for Black.
 - The warning has a **Cancel blackout** button. With notifications enabled, a high-importance notification appears about 10 seconds before the blackout with a **Cancel** action. Three quick taps on the black screen cancel an active blackout. Canceling starts a fresh interval.
 - The countdown pauses while another app records audio. If recording begins during a warning or blackout, that sequence is dismissed; a full interval begins when recording ends.
 - Locking or turning off the screen pauses the countdown and dismisses an active warning or blackout. Unlocking within one minute resumes the remaining countdown; after one minute, it starts a full interval.
 - If the schedule was enabled, Android restarts it after a reboot or app update. Force-stop and some device battery restrictions can prevent this. If overlay permission is revoked, the service stops and the app shows that permission is needed.
+
+## Notification choices
+
+Black uses separate Android notification channels: **Black schedule** for the required running-service card and **Blackout warnings** for the final Cancel alert. In the phone's **Settings → Apps → Black → Notifications**, some devices let you silence or turn off only **Black schedule** while leaving **Blackout warnings** enabled. Android can still list the foreground service under **Active apps**. Disabling all Black notifications also hides the Cancel alert.
+
+An alarm-based schedule could avoid the running-service card, but Android requires exact-alarm access on many devices, and the app could no longer continuously detect microphone use between alarms.
 
 ## Build notes
 
@@ -32,7 +39,7 @@ Start an Android 14+ emulator, build the APK, and run:
 python3 scripts/emulator_eye_test.py
 ```
 
-The script works only with an `emulator-*` ADB device. It reinstalls the APK, **clears Black's emulator app data**, grants overlay and notification permissions, then sets an 8-second interval in the app. It checks the countdown, warning overlay, 10-second notification and its Cancel action, blackout overlay, three-tap dismissal, screen-off and wake behavior, and Stop control. Screenshots and a browsable gallery are written to `artifacts/eye-tests/index.html`. Run the same command again for another pass. The generated artifacts are ignored by Git. Add `--include-reboot` for the slower boot recovery check.
+The script works only with an `emulator-*` ADB device. It reinstalls the APK, **clears Black's emulator app data**, grants overlay and notification permissions, captures System and Dark appearance, then sets an 8-second interval in the app. It checks the countdown, warning overlay, 10-second notification and its Cancel action, blackout overlay, three-tap dismissal, and screen-off and wake behavior. It stops the service at the end. Screenshots and a browsable gallery are written to `artifacts/eye-tests/index.html`. Run the same command again for another pass. The generated artifacts are ignored by Git. Add `--include-reboot` for the slower boot recovery check.
 
 If you need an emulator, install the Android SDK packages `emulator` and `system-images;android-36;default;arm64-v8a`, then create an AVD with `avdmanager create avd -n black_api36 -k 'system-images;android-36;default;arm64-v8a'`. Start it with `emulator -avd black_api36` before running the script.
 

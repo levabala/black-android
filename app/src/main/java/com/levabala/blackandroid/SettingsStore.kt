@@ -2,6 +2,8 @@ package com.levabala.blackandroid
 
 import android.content.Context
 
+enum class Appearance { SYSTEM, LIGHT, DARK }
+
 class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("black", Context.MODE_PRIVATE)
 
@@ -12,6 +14,12 @@ class SettingsStore(context: Context) {
     var status: String
         get() = prefs.getString("status", "Stopped") ?: "Stopped"
         set(value) = prefs.edit().putString("status", value).apply()
+
+    var appearance: Appearance
+        get() = runCatching {
+            Appearance.valueOf(prefs.getString("appearance", Appearance.SYSTEM.name) ?: Appearance.SYSTEM.name)
+        }.getOrDefault(Appearance.SYSTEM)
+        set(value) = prefs.edit().putString("appearance", value.name).apply()
 
     fun load(): BlackSettings = BlackSettings(
         intervalMillis = prefs.getLong("intervalMillis", 20 * 60 * 1000L),

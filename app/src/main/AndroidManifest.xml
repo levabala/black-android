@@ -11,7 +11,7 @@
         android:allowBackup="false"
         android:label="Black"
         android:icon="@android:drawable/ic_lock_idle_alarm"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/BlackTheme">
 
         <activity
             android:name=".MainActivity"

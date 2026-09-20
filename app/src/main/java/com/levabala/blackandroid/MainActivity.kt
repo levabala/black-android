@@ -2,7 +2,9 @@ package com.levabala.blackandroid
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -11,7 +13,8 @@ import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
 import android.view.ViewGroup
-import android.view.WindowInsetsController
+import android.view.View
+import android.widget.AdapterView
 import android.widget.Button
 import android.widget.ArrayAdapter
 import android.widget.EditText
@@ -40,12 +43,24 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun attachBaseContext(newBase: Context) {
+        val night = when (SettingsStore(newBase).appearance) {
+            Appearance.SYSTEM -> null
+            Appearance.LIGHT -> Configuration.UI_MODE_NIGHT_NO
+            Appearance.DARK -> Configuration.UI_MODE_NIGHT_YES
+        }
+        if (night == null) {
+            super.attachBaseContext(newBase)
+        } else {
+            val config = Configuration(newBase.resources.configuration).apply {
+                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
+            }
+            super.attachBaseContext(newBase.createConfigurationContext(config))
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.decorView.windowInsetsController?.setSystemBarsAppearance(
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-        )
         store = SettingsStore(this)
         val saved = store.load()
         val root = LinearLayout(this).apply {
@@ -58,6 +73,25 @@ class MainActivity : Activity() {
         root.addView(TextView(this).apply { text = "Black"; textSize = 30f })
         status = TextView(this).apply { textSize = 18f; setPadding(0, dp(12), 0, dp(18)) }
         root.addView(status)
+
+        root.addView(TextView(this).apply { text = "Appearance"; setPadding(0, dp(12), 0, 0) })
+        val appearance = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("System", "Light", "Dark"))
+            setSelection(store.appearance.ordinal)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    val selected = Appearance.entries[position]
+                    if (store.appearance != selected) {
+                        store.appearance = selected
+                        recreate()
+                    }
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+        }
+        root.addView(appearance)
 
         val intervalIsMinutes = saved.intervalMillis % 60_000L == 0L
         interval = numberField(root, "Interval", if (intervalIsMinutes) saved.intervalMillis / 60_000 else saved.intervalMillis / 1_000)
