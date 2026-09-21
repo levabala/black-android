@@ -181,6 +181,7 @@ def main():
     command("install", "-r", str(APK))
     # This script only runs on an emulator. Reset app data for a deterministic, cheap rerun.
     command("shell", "pm", "clear", PACKAGE)
+    command("logcat", "-c")
     command("shell", "appops", "set", PACKAGE, "SYSTEM_ALERT_WINDOW", "allow")
     command("shell", "pm", "grant", PACKAGE, "android.permission.POST_NOTIFICATIONS")
     command("shell", "cmd", "statusbar", "collapse")
@@ -270,6 +271,23 @@ def main():
     command("shell", "run-as", PACKAGE, "am", "startservice", "--user", "0",
             "-n", f"{PACKAGE}/.BlackService", "-a", f"{PACKAGE}.STOP")
     wait_status("Stopped", 5)
+    logs = command("logcat", "-d")
+    expected_events = {
+        "settings.saved",
+        "user.schedule_start",
+        "service.created",
+        "service.health",
+        "service.phase_changed",
+        "service.warning_notification_posted",
+        "service.warning_notification_removed",
+        "user.blackout_cancel",
+        "service.screen_availability_changed",
+        "service.stop_command",
+    }
+    missing_events = sorted(event for event in expected_events if event not in logs)
+    if missing_events:
+        raise RuntimeError(f"Structured logs were missing expected events: {missing_events}")
+    print(f"PASS Structured logging: {len(expected_events)} expected events", flush=True)
     write_gallery()
     print(f"Eye test passed. Open {OUTPUT / 'index.html'} to review screenshots.")
 

@@ -31,13 +31,22 @@ class BlackService : Service() {
     private var lastPhase: Phase? = null
     private var lastStatus = ""
     private var warningNotificationSent = false
+    private var lastHealthLoggedAt = 0L
+    private var lastMicrophoneActive: Boolean? = null
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            val previousPhase = timer.phase
             val keyguard = getSystemService(KeyguardManager::class.java)
             val power = getSystemService(PowerManager::class.java)
             val available = power.isInteractive && !keyguard.isKeyguardLocked
             timer.setScreenAvailable(available, SystemClock.elapsedRealtime())
+            AppLog.info("service.screen_availability_changed", mapOf(
+                "broadcast_action" to (intent.action ?: "unknown"),
+                "screen_available" to available,
+                "phase_before" to previousPhase.name.lowercase(),
+                "phase_after" to timer.phase.name.lowercase(),
+            ))
             render()
         }
     }
@@ -45,7 +54,16 @@ class BlackService : Service() {
     private val recordingCallback = object : AudioManager.AudioRecordingCallback() {
         override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>) {
             handler.post {
-                timer.setMicrophoneActive(configs.isNotEmpty(), SystemClock.elapsedRealtime())
+                val active = configs.isNotEmpty()
+                timer.setMicrophoneActive(active, SystemClock.elapsedRealtime())
+                if (lastMicrophoneActive != active) {
+                    AppLog.info("service.microphone_activity_changed", mapOf(
+                        "active" to active,
+                        "recording_count" to configs.size,
+                        "phase" to timer.phase.name.lowercase(),
+                    ))
+                    lastMicrophoneActive = active
+                }
                 render()
             }
         }
@@ -54,10 +72,12 @@ class BlackService : Service() {
     private val ticker = object : Runnable {
         override fun run() {
             if (!store.enabled) {
+                AppLog.info("service.stopping", mapOf("reason" to "schedule_disabled"))
                 stopSelf()
                 return
             }
             if (!Settings.canDrawOverlays(this@BlackService)) {
+                AppLog.warn("service.stopping", mapOf("reason" to "overlay_permission_missing"))
                 overlay.remove()
                 store.status = "Overlay permission needed"
                 stopSelf()
@@ -65,6 +85,7 @@ class BlackService : Service() {
             }
             timer.tick(SystemClock.elapsedRealtime())
             render()
+            logHealthIfDue()
             handler.postDelayed(this, 500)
         }
     }
@@ -76,6 +97,7 @@ class BlackService : Service() {
         overlay = OverlayController(this) { cancel() }
         audio = getSystemService(AudioManager::class.java)
         notifications = getSystemService(NotificationManager::class.java)
+        AppLog.info("service.created")
         notifications.createNotificationChannel(
             NotificationChannel(CHANNEL, "Black schedule", NotificationManager.IMPORTANCE_LOW)
         )
@@ -91,7 +113,15 @@ class BlackService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        AppLog.info("service.command_received", mapOf(
+            "command" to (intent?.action ?: "sticky_restart"),
+            "start_id" to startId,
+            "enabled" to store.enabled,
+        ))
         if (intent?.action == ACTION_STOP || !store.enabled) {
+            AppLog.info("service.stop_command", mapOf(
+                "explicit" to (intent?.action == ACTION_STOP),
+            ))
             store.enabled = false
             store.status = "Stopped"
             stopSelf()
@@ -106,12 +136,25 @@ class BlackService : Service() {
             val keyguard = getSystemService(KeyguardManager::class.java)
             timer.start(now, power.isInteractive && !keyguard.isKeyguardLocked,
                 audio.activeRecordingConfigurations.isNotEmpty())
+            AppLog.info("service.scheduler_started", mapOf(
+                "screen_available" to (power.isInteractive && !keyguard.isKeyguardLocked),
+                "microphone_active" to audio.activeRecordingConfigurations.isNotEmpty(),
+            ))
             handler.post(ticker)
         }
         when (intent?.action) {
-            ACTION_UPDATE -> timer.updateSettings(store.load(), now)
-            ACTION_CANCEL -> timer.cancel(now)
-            ACTION_TEST -> timer.testNow(now)
+            ACTION_UPDATE -> {
+                timer.updateSettings(store.load(), now)
+                AppLog.info("service.settings_updated")
+            }
+            ACTION_CANCEL -> {
+                timer.cancel(now)
+                AppLog.info("user.blackout_cancel", mapOf("source" to "notification"))
+            }
+            ACTION_TEST -> {
+                timer.testNow(now)
+                AppLog.info("service.test_started")
+            }
         }
         render()
         return START_STICKY
@@ -119,6 +162,7 @@ class BlackService : Service() {
 
     private fun cancel() {
         timer.cancel(SystemClock.elapsedRealtime())
+        AppLog.info("user.blackout_cancel", mapOf("source" to "overlay"))
         render()
     }
 
@@ -144,14 +188,34 @@ class BlackService : Service() {
         if (timer.phase == Phase.WARNING && timer.remainingMillis(now) < 10_000 && !warningNotificationSent) {
             notifications.notify(WARNING_NOTIFICATION_ID, warningNotification())
             warningNotificationSent = true
+            AppLog.info("service.warning_notification_posted")
         } else if (timer.phase != Phase.WARNING && warningNotificationSent) {
             notifications.cancel(WARNING_NOTIFICATION_ID)
             warningNotificationSent = false
+            AppLog.info("service.warning_notification_removed")
         }
         if (timer.phase != lastPhase) {
+            AppLog.info("service.phase_changed", mapOf(
+                "phase_before" to (lastPhase?.name?.lowercase() ?: "none"),
+                "phase_after" to timer.phase.name.lowercase(),
+                "remaining_ms" to timer.remainingMillis(now),
+            ))
             notifications.notify(NOTIFICATION_ID, notification())
             lastPhase = timer.phase
         }
+    }
+
+    private fun logHealthIfDue() {
+        val now = SystemClock.elapsedRealtime()
+        if (lastHealthLoggedAt != 0L && now - lastHealthLoggedAt < HEALTH_LOG_INTERVAL_MS) return
+        lastHealthLoggedAt = now
+        AppLog.info("service.health", mapOf(
+            "phase" to timer.phase.name.lowercase(),
+            "remaining_ms" to timer.remainingMillis(now),
+            "schedule_enabled" to store.enabled,
+            "overlay_permission" to Settings.canDrawOverlays(this),
+            "process_uptime_ms" to now,
+        ))
     }
 
     private fun notification(): Notification {
@@ -186,6 +250,7 @@ class BlackService : Service() {
     }
 
     override fun onDestroy() {
+        AppLog.info("service.destroyed", mapOf("phase" to timer.phase.name.lowercase()))
         handler.removeCallbacks(ticker)
         audio.unregisterAudioRecordingCallback(recordingCallback)
         unregisterReceiver(screenReceiver)
@@ -202,6 +267,7 @@ class BlackService : Service() {
         private const val WARNING_CHANNEL = "black_warning"
         private const val NOTIFICATION_ID = 1
         private const val WARNING_NOTIFICATION_ID = 2
+        private const val HEALTH_LOG_INTERVAL_MS = 5 * 60 * 1_000L
         const val ACTION_START = "com.levabala.blackandroid.START"
         const val ACTION_STOP = "com.levabala.blackandroid.STOP"
         const val ACTION_UPDATE = "com.levabala.blackandroid.UPDATE"

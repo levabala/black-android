@@ -5,6 +5,8 @@ import com.datadog.android.Datadog
 import com.datadog.android.DatadogSite
 import com.datadog.android.core.configuration.Configuration
 import com.datadog.android.privacy.TrackingConsent
+import com.datadog.android.log.Logs
+import com.datadog.android.log.LogsConfiguration
 import com.datadog.android.rum.Rum
 import com.datadog.android.rum.RumConfiguration
 import com.datadog.android.rum.tracking.ActivityViewTrackingStrategy
@@ -22,6 +24,9 @@ class BlackApplication : Application() {
         ).useSite(DatadogSite.EU1).build()
         Datadog.initialize(this, configuration, TrackingConsent.GRANTED)
 
+        Logs.enable(LogsConfiguration.Builder().build())
+        AppLog.initialize()
+
         Rum.enable(
             RumConfiguration.Builder(RUM_APPLICATION_ID)
                 .trackUserInteractions()
@@ -29,6 +34,7 @@ class BlackApplication : Application() {
                 .useViewTrackingStrategy(ActivityViewTrackingStrategy(trackExtras = false))
                 .build()
         )
+        AppLog.info("app.initialized")
     }
 
     private companion object {

@@ -9,15 +9,23 @@ import android.os.Bundle
 class UpdateInstallActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, Int.MIN_VALUE)) {
+        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, Int.MIN_VALUE)
+        AppLog.info("update.installer_status", mapOf(
+            "status" to status,
+            "status_message" to (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""),
+        ))
+        when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirmation = intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
                 if (confirmation == null) {
+                    AppLog.warn("update.confirmation_missing")
                     showResult("Android did not provide an installation prompt.")
                 } else {
                     try {
+                        AppLog.info("update.confirmation_opened")
                         startActivity(confirmation)
                     } catch (error: Exception) {
+                        AppLog.error("update.confirmation_failed", error)
                         showResult("Could not open Android's installer: ${error.message ?: "unknown error"}")
                     }
                 }

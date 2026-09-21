@@ -35,7 +35,9 @@ The in-app updater expects a public release tagged like `v1.0.5` with an asset n
 
 The Gradle wrapper downloads Gradle 9.4.1. The app uses Android Gradle Plugin 9.2.1 and API 36. `SchedulerCore` contains the timer logic and has local unit tests.
 
-Datadog RUM uses application ID `2151fa26-2c6d-47ae-96a5-f4dabf4a6248` and its public client token on the EU1 site. Override the embedded client token with the `DATADOG_RUM_CLIENT_TOKEN` Gradle property or environment variable when needed. RUM tracks activities, UI interactions, errors, crashes, and main-thread tasks longer than 100 ms.
+Datadog uses application ID `2151fa26-2c6d-47ae-96a5-f4dabf4a6248` and its public client token on the EU1 site. Override the embedded client token with the `DATADOG_RUM_CLIENT_TOKEN` Gradle property or environment variable when needed. RUM tracks activities, UI interactions, errors, crashes, and main-thread tasks longer than 100 ms.
+
+Structured Datadog logs cover user commands, saved timer settings, update progress and failures, service commands, phase changes, warning notification lifecycle, screen and microphone state changes, restart recovery, and service health. Health is emitted when the service starts and every five minutes afterward. Logs use service and logger name `black-android`, include app version metadata, and are linked to the active RUM session. Debug APKs also write these events to Logcat.
 
 ## Repeatable emulator eye test
 

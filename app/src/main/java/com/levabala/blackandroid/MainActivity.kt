@@ -103,11 +103,13 @@ class MainActivity : Activity() {
 
         startStop = button(root, "Start") {
             if (store.enabled) {
+                AppLog.info("user.schedule_stop")
                 store.enabled = false
                 store.status = "Stopped"
                 startService(BlackService.command(this, BlackService.ACTION_STOP))
             } else if (saveSettings()) {
                 if (!Settings.canDrawOverlays(this)) {
+                    AppLog.warn("permission.overlay_requested")
                     Toast.makeText(this, "Allow Black to display over other apps, then tap Start again", Toast.LENGTH_LONG).show()
                     startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:$packageName")))
@@ -115,17 +117,23 @@ class MainActivity : Activity() {
                 }
                 store.enabled = true
                 store.status = "Starting"
+                AppLog.info("user.schedule_start")
                 startForegroundService(BlackService.command(this, BlackService.ACTION_START))
                 requestNotifications()
             }
         }
         button(root, "Save settings") {
-            if (saveSettings() && store.enabled) startService(BlackService.command(this, BlackService.ACTION_UPDATE))
+            if (saveSettings() && store.enabled) {
+                AppLog.info("user.schedule_settings_applied")
+                startService(BlackService.command(this, BlackService.ACTION_UPDATE))
+            }
         }
         button(root, "Test now") {
             if (!store.enabled) {
+                AppLog.warn("user.test_rejected", mapOf("reason" to "schedule_stopped"))
                 Toast.makeText(this, "Start the schedule first", Toast.LENGTH_SHORT).show()
             } else {
+                AppLog.info("user.test_now")
                 startService(BlackService.command(this, BlackService.ACTION_TEST))
                 moveTaskToBack(true)
             }
@@ -146,6 +154,7 @@ class MainActivity : Activity() {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     val selected = Appearance.entries[position]
                     if (store.appearance != selected) {
+                        AppLog.info("user.appearance_changed", mapOf("appearance" to selected.name.lowercase()))
                         store.appearance = selected
                         recreate()
                     }
@@ -158,6 +167,7 @@ class MainActivity : Activity() {
     }
 
     private fun checkForUpdates() {
+        AppLog.info("user.update_check")
         updateButton.isEnabled = false
         updateStatus.text = "Checking GitHub Releases…"
         val updater = AppUpdater(applicationContext)
@@ -165,6 +175,7 @@ class MainActivity : Activity() {
             try {
                 val release = updater.latestUpdate()
                 if (release == null) {
+                    AppLog.info("update.up_to_date")
                     runOnUiThread {
                         if (!isDestroyed) {
                             updateStatus.text = "Black is up to date."
@@ -173,10 +184,12 @@ class MainActivity : Activity() {
                     }
                     return@Thread
                 }
+                AppLog.info("update.available", mapOf("target_version" to release.version.toString()))
                 runOnUiThread {
                     if (!isDestroyed) updateStatus.text = "Downloading Black ${release.version}…"
                 }
                 updater.downloadAndVerify(release)
+                AppLog.info("update.download_verified", mapOf("target_version" to release.version.toString()))
                 runOnUiThread {
                     if (!isDestroyed) {
                         updateStatus.text = "Black ${release.version} is ready to install."
@@ -184,6 +197,7 @@ class MainActivity : Activity() {
                     }
                 }
             } catch (error: Exception) {
+                AppLog.error("update.failed", error)
                 runOnUiThread {
                     if (!isDestroyed) {
                         updateStatus.text = "Update failed: ${error.message ?: "unknown error"}"
@@ -197,11 +211,13 @@ class MainActivity : Activity() {
     private fun installDownloadedUpdate() {
         val file = File(cacheDir, "black-update.apk")
         if (!file.isFile) {
+            AppLog.warn("update.apk_missing")
             updateStatus.text = "The downloaded APK is gone. Check for updates again."
             updateButton.isEnabled = true
             return
         }
         if (!packageManager.canRequestPackageInstalls()) {
+            AppLog.info("permission.install_packages_requested")
             pendingInstallerPermission = true
             updateStatus.text = "Allow installs from Black in Android settings, then return here."
             startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -209,6 +225,7 @@ class MainActivity : Activity() {
             return
         }
         pendingInstallerPermission = false
+        AppLog.info("update.installer_preparing", mapOf("apk_bytes" to file.length()))
         updateStatus.text = "Preparing Android's installer…"
         val callbackOptions = ActivityOptions.makeBasic().apply {
             @Suppress("DEPRECATION")
@@ -226,7 +243,9 @@ class MainActivity : Activity() {
         Thread {
             try {
                 updater.stageInstall(file, callback.intentSender)
+                AppLog.info("update.installer_staged")
             } catch (error: Exception) {
+                AppLog.error("update.installer_failed", error)
                 runOnUiThread {
                     if (!isDestroyed) {
                         updateStatus.text = "Could not start installation: ${error.message ?: "unknown error"}"
@@ -249,12 +268,19 @@ class MainActivity : Activity() {
         val intervalLimit = if (intervalUnit.selectedItemPosition == 0) 1440L else 86_400L
         if (intervalValue == null || intervalValue !in 1..intervalLimit || warningSeconds == null || warningSeconds !in 10..300 ||
             blackoutSeconds == null || blackoutSeconds !in 1..300) {
+            AppLog.warn("settings.validation_failed")
             Toast.makeText(this, "Use 1–1440 minutes or 1–86400 seconds, a 10–300 second warning, and a 1–300 second blackout", Toast.LENGTH_LONG).show()
             return false
         }
         val intervalMillis = intervalValue * if (intervalUnit.selectedItemPosition == 0) 60_000L else 1_000L
         store.save(BlackSettings(intervalMillis, warningSeconds * 1_000,
             blackoutSeconds * 1_000, pauseMic.isChecked))
+        AppLog.info("settings.saved", mapOf(
+            "interval_ms" to intervalMillis,
+            "warning_ms" to warningSeconds * 1_000,
+            "blackout_ms" to blackoutSeconds * 1_000,
+            "pause_for_microphone" to pauseMic.isChecked,
+        ))
         return true
     }
 
@@ -289,6 +315,7 @@ class MainActivity : Activity() {
         // service while leaving the persisted enabled flag intact. Starting an already-running
         // service is harmless; if it was lost, this restores the schedule while the app is visible.
         if (store.enabled && Settings.canDrawOverlays(this)) {
+            AppLog.info("service.recovery_requested", mapOf("source" to "activity_resume"))
             startForegroundService(BlackService.command(this, BlackService.ACTION_START))
         }
         handler.post(refresh)
@@ -300,8 +327,10 @@ class MainActivity : Activity() {
         if (pendingInstallerPermission) {
             pendingInstallerPermission = false
             if (packageManager.canRequestPackageInstalls()) {
+                AppLog.info("permission.install_packages_granted")
                 installDownloadedUpdate()
             } else {
+                AppLog.warn("permission.install_packages_denied")
                 updateStatus.text = "Allow installs from Black to install the downloaded update."
                 updateButton.isEnabled = true
             }
