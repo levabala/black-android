@@ -113,6 +113,16 @@ def wait_status(prefix, timeout=30):
     raise RuntimeError(f"Expected status starting with {prefix!r}; last status: {current_status()!r}")
 
 
+def wait_status_change(previous, timeout=8):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        status = current_status()
+        if status and status != previous:
+            return status
+        time.sleep(0.3)
+    raise RuntimeError(f"Status remained frozen at {previous!r}")
+
+
 def status_seconds(status):
     match = re.search(r"(\d+):(\d{2})", status)
     if not match:
@@ -206,6 +216,15 @@ def main():
     capture("01-countdown.png", "Countdown with 8-second interval", wait_status("Next warning"))
     if warning_notification_active():
         raise RuntimeError("The 10-second warning notification appeared during countdown")
+
+    # Reopening the app must recover an enabled schedule if Android killed its process during
+    # an install or another system action. STOP is backed by the enabled setting, so also verify
+    # that the service resumed and the displayed countdown actually changes.
+    command("shell", "am", "force-stop", PACKAGE)
+    command("shell", "am", "start", "-n", ACTIVITY)
+    recovered = wait_status("Next warning")
+    capture("01-recovered.png", "Enabled schedule recovered after process stop",
+            wait_status_change(recovered))
     command("shell", "input", "keyevent", "KEYCODE_HOME")
 
     warning_status = wait_status("Blackout in", 20)

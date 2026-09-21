@@ -274,6 +274,12 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // Package installers and device-specific process management can kill the foreground
+        // service while leaving the persisted enabled flag intact. Starting an already-running
+        // service is harmless; if it was lost, this restores the schedule while the app is visible.
+        if (store.enabled && Settings.canDrawOverlays(this)) {
+            startForegroundService(BlackService.command(this, BlackService.ACTION_START))
+        }
         handler.post(refresh)
         store.updateResult?.let {
             updateStatus.text = it

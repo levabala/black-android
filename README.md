@@ -19,7 +19,7 @@ The app uses a foreground service and an Android application overlay. Android ma
 - The warning has a **Cancel blackout** button. With notifications enabled, a high-importance notification appears about 10 seconds before the blackout with a **Cancel** action. Three quick taps on the black screen cancel an active blackout. Canceling starts a fresh interval.
 - The countdown pauses while another app records audio. If recording begins during a warning or blackout, that sequence is dismissed; a full interval begins when recording ends.
 - Locking or turning off the screen pauses the countdown and dismisses an active warning or blackout. Unlocking within one minute resumes the remaining countdown; after one minute, it starts a full interval.
-- If the schedule was enabled, Android restarts it after a reboot or app update. Force-stop and some device battery restrictions can prevent this. If overlay permission is revoked, the service stops and the app shows that permission is needed.
+- If the schedule was enabled, Android restarts it after a reboot or app update. Opening Black also restores an enabled schedule if an installer or device-specific process manager stopped its service. Force-stop and some device battery restrictions can still prevent background recovery until the app is opened. If overlay permission is revoked, the service stops and the app shows that permission is needed.
 
 ## Notification choices
 
