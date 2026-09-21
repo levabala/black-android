@@ -142,6 +142,10 @@ class MainActivity : Activity() {
             text = "Guided test: cancel once from the notification, cancel once from the warning, then triple-tap the blackout. Your normal settings resume afterward."
             setPadding(0, 0, 0, dp(8))
         })
+        button(root, "App exceptions") {
+            AppLog.info("user.exceptions_opened")
+            startActivity(Intent(this, ExceptionsActivity::class.java))
+        }
         updateStatus = TextView(this).apply {
             text = "Updates are downloaded from GitHub Releases."
             setPadding(0, dp(18), 0, dp(6))

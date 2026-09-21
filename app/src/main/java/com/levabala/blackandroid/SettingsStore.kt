@@ -25,6 +25,24 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("updateResult", null)
         set(value) = prefs.edit().putString("updateResult", value).apply()
 
+    var exceptionPackages: Set<String>
+        get() = prefs.getStringSet("exceptionPackages", emptySet())?.toSet() ?: emptySet()
+        private set(value) = prefs.edit().putStringSet("exceptionPackages", value).apply()
+
+    fun addException(packageName: String): Boolean {
+        val updated = exceptionPackages + packageName
+        if (updated == exceptionPackages) return false
+        exceptionPackages = updated
+        return true
+    }
+
+    fun removeException(packageName: String): Boolean {
+        val updated = exceptionPackages - packageName
+        if (updated == exceptionPackages) return false
+        exceptionPackages = updated
+        return true
+    }
+
     fun load(): BlackSettings = BlackSettings(
         intervalMillis = prefs.getLong("intervalMillis", 20 * 60 * 1000L),
         warningMillis = prefs.getLong("warningMillis", 10 * 1000L).coerceAtLeast(10 * 1000L),

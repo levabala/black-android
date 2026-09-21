@@ -75,6 +75,50 @@ class SchedulerCoreTest {
         assertEquals(15_000, timer.remainingMillis(25_000))
     }
 
+    @Test fun exceptionPausesAndPreservesCountdown() {
+        val timer = SchedulerCore(settings)
+        timer.start(0, true, false)
+        timer.setExceptionActive(true, 5_000)
+        assertEquals(Phase.APP_PAUSED, timer.phase)
+        assertEquals(15_000, timer.remainingMillis(50_000))
+        timer.setExceptionActive(false, 50_000)
+        assertEquals(Phase.COUNTDOWN, timer.phase)
+        assertEquals(15_000, timer.remainingMillis(50_000))
+    }
+
+    @Test fun exceptionFreezesWarningAndGetsPriorityOverMicrophone() {
+        val timer = SchedulerCore(settings)
+        timer.start(0, true, false)
+        timer.tick(20_000)
+        timer.setExceptionActive(true, 21_000)
+        assertEquals(Phase.APP_PAUSED, timer.phase)
+        assertEquals(9_000, timer.remainingMillis(21_000))
+        timer.setMicrophoneActive(true, 22_000)
+        assertEquals(Phase.APP_PAUSED, timer.phase)
+        timer.setExceptionActive(false, 23_000)
+        assertEquals(Phase.MIC_PAUSED, timer.phase)
+    }
+
+    @Test fun exceptionResumesWarningWhenMicrophoneIsIdle() {
+        val timer = SchedulerCore(settings)
+        timer.start(0, true, false)
+        timer.tick(20_000)
+        timer.setExceptionActive(true, 21_000)
+        timer.setExceptionActive(false, 50_000)
+        assertEquals(Phase.WARNING, timer.phase)
+        assertEquals(9_000, timer.remainingMillis(50_000))
+    }
+
+    @Test fun exceptionRemainsPausedAcrossLockAndUnlock() {
+        val timer = SchedulerCore(settings)
+        timer.start(0, true, false)
+        timer.setExceptionActive(true, 5_000)
+        timer.setScreenAvailable(false, 6_000)
+        assertEquals(Phase.LOCKED, timer.phase)
+        timer.setScreenAvailable(true, 20_000)
+        assertEquals(Phase.APP_PAUSED, timer.phase)
+    }
+
     @Test fun testNowHonorsMicrophonePause() {
         val timer = SchedulerCore(settings)
         timer.start(0, true, true)

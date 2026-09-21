@@ -36,13 +36,17 @@ class BlackService : Service() {
     private lateinit var overlay: OverlayController
     private lateinit var audio: AudioManager
     private lateinit var notifications: NotificationManager
+    private lateinit var foregroundApps: ForegroundAppTracker
     private var lastPhase: Phase? = null
     private var lastStatus = ""
     private var warningNotificationSent = false
+    private var warningNotificationTarget: String? = null
     private var lastHealthLoggedAt = 0L
     private var lastMicrophoneActive: Boolean? = null
     private var testStep: TestStep? = null
     private var testPassedUntil = 0L
+    private var currentForegroundPackage: String? = null
+    private var currentExceptionPackage: String? = null
     private val startTestStep = Runnable {
         val now = SystemClock.elapsedRealtime()
         if (testStep != null && timer.phase == Phase.COUNTDOWN) {
@@ -104,6 +108,7 @@ class BlackService : Service() {
                 return
             }
             val now = SystemClock.elapsedRealtime()
+            updateForegroundException(now)
             val phaseBefore = timer.phase
             timer.tick(now)
             keepTestMoving(phaseBefore, now)
@@ -120,6 +125,7 @@ class BlackService : Service() {
         overlay = OverlayController(this) { cancel() }
         audio = getSystemService(AudioManager::class.java)
         notifications = getSystemService(NotificationManager::class.java)
+        foregroundApps = ForegroundAppTracker(this)
         AppLog.info("service.created")
         notifications.createNotificationChannel(
             NotificationChannel(CHANNEL, "Black schedule", NotificationManager.IMPORTANCE_LOW)
@@ -157,8 +163,15 @@ class BlackService : Service() {
         if (timer.phase == Phase.STOPPED) {
             val power = getSystemService(PowerManager::class.java)
             val keyguard = getSystemService(KeyguardManager::class.java)
-            timer.start(now, power.isInteractive && !keyguard.isKeyguardLocked,
-                audio.activeRecordingConfigurations.isNotEmpty())
+            currentForegroundPackage = foregroundApps.currentPackage()
+            currentExceptionPackage = currentForegroundPackage
+                ?.takeIf { it in store.exceptionPackages }
+            timer.start(
+                now,
+                power.isInteractive && !keyguard.isKeyguardLocked,
+                audio.activeRecordingConfigurations.isNotEmpty(),
+                currentExceptionPackage != null,
+            )
             AppLog.info("service.scheduler_started", mapOf(
                 "screen_available" to (power.isInteractive && !keyguard.isKeyguardLocked),
                 "microphone_active" to audio.activeRecordingConfigurations.isNotEmpty(),
@@ -176,6 +189,24 @@ class BlackService : Service() {
             }
             ACTION_TEST -> {
                 startGuidedTest(now)
+            }
+            ACTION_ADD_EXCEPTION -> {
+                val targetPackage = intent.getStringExtra(EXTRA_PACKAGE_NAME)
+                if (!targetPackage.isNullOrBlank() && targetPackage != packageName) {
+                    endTest(now, passed = false)
+                    if (timer.phase == Phase.WARNING || timer.phase == Phase.BLACKOUT) {
+                        timer.cancel(now)
+                    }
+                    val added = store.addException(targetPackage)
+                    AppLog.info("user.exception_added", mapOf(
+                        "source" to "warning_notification",
+                        "package_name" to targetPackage,
+                        "already_present" to !added,
+                    ))
+                    updateForegroundException(now)
+                } else {
+                    AppLog.warn("user.exception_add_failed", mapOf("reason" to "missing_current_app"))
+                }
             }
         }
         render()
@@ -275,6 +306,26 @@ class BlackService : Service() {
         null -> null
     }
 
+    private fun updateForegroundException(now: Long) {
+        val previousPackage = currentForegroundPackage
+        val detected = foregroundApps.currentPackage()
+        currentForegroundPackage = if (AppCatalog.usageAccessGranted(this)) detected else null
+        if (previousPackage != currentForegroundPackage) {
+            AppLog.info("service.foreground_app_changed", mapOf(
+                "package_name" to (currentForegroundPackage ?: "unknown"),
+            ))
+        }
+        val excepted = currentForegroundPackage?.takeIf { it in store.exceptionPackages }
+        if (excepted != currentExceptionPackage) {
+            currentExceptionPackage = excepted
+            timer.setExceptionActive(excepted != null, now)
+            AppLog.info("service.exception_pause_changed", mapOf(
+                "active" to (excepted != null),
+                "package_name" to (excepted ?: currentForegroundPackage ?: "unknown"),
+            ))
+        }
+    }
+
     private fun render() {
         val now = SystemClock.elapsedRealtime()
         when (timer.phase) {
@@ -289,6 +340,7 @@ class BlackService : Service() {
             Phase.WARNING -> "Blackout in ${formatTime(timer.remainingMillis(now))}"
             Phase.BLACKOUT -> "Blackout: ${formatTime(timer.remainingMillis(now))} left"
             Phase.MIC_PAUSED -> "Paused for microphone"
+            Phase.APP_PAUSED -> "Paused for ${currentExceptionPackage?.let { AppCatalog.label(this, it) } ?: "app exception"}"
             Phase.LOCKED -> "Paused while locked: ${formatTime(timer.remainingMillis(now))} left"
         }
         val status = when {
@@ -305,13 +357,16 @@ class BlackService : Service() {
         val warningNotificationNeeded = timer.phase == Phase.WARNING &&
             timer.remainingMillis(now) < 10_000 &&
             (testStep == null || testStep == TestStep.NOTIFICATION_CANCEL)
-        if (warningNotificationNeeded && !warningNotificationSent) {
+        if (warningNotificationNeeded &&
+            (!warningNotificationSent || warningNotificationTarget != currentForegroundPackage)) {
             notifications.notify(WARNING_NOTIFICATION_ID, warningNotification())
             warningNotificationSent = true
+            warningNotificationTarget = currentForegroundPackage
             AppLog.info("service.warning_notification_posted")
         } else if (!warningNotificationNeeded && warningNotificationSent) {
             notifications.cancel(WARNING_NOTIFICATION_ID)
             warningNotificationSent = false
+            warningNotificationTarget = null
             AppLog.info("service.warning_notification_removed")
         }
         if (timer.phase != lastPhase) {
@@ -334,6 +389,10 @@ class BlackService : Service() {
             "remaining_ms" to timer.remainingMillis(now),
             "schedule_enabled" to store.enabled,
             "overlay_permission" to Settings.canDrawOverlays(this),
+            "usage_access" to AppCatalog.usageAccessGranted(this),
+            "exception_count" to store.exceptionPackages.size,
+            "exception_active" to (currentExceptionPackage != null),
+            "foreground_package" to (currentForegroundPackage ?: "unknown"),
             "process_uptime_ms" to now,
         ))
     }
@@ -358,15 +417,29 @@ class BlackService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val cancel = PendingIntent.getService(this, 2, command(this, ACTION_CANCEL),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        return Notification.Builder(this, WARNING_CHANNEL)
+        val builder = Notification.Builder(this, WARNING_CHANNEL)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(if (testStep == TestStep.NOTIFICATION_CANCEL) "Test 1/3: notification Cancel" else "Blackout in 10 seconds")
             .setContentText(if (testStep == TestStep.NOTIFICATION_CANCEL) "Tap Cancel to pass this step" else "Tap Cancel to skip this blackout")
             .setContentIntent(open)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_REMINDER)
             .addAction(Notification.Action.Builder(null, "Cancel", cancel).build())
-            .build()
+        currentForegroundPackage?.takeIf { it != packageName }?.let { foregroundPackage ->
+            val addException = PendingIntent.getService(
+                this,
+                ADD_EXCEPTION_REQUEST,
+                command(this, ACTION_ADD_EXCEPTION).putExtra(EXTRA_PACKAGE_NAME, foregroundPackage),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            builder.addAction(Notification.Action.Builder(
+                null,
+                "Except ${AppCatalog.label(this, foregroundPackage)}",
+                addException,
+            ).build())
+        }
+        return builder.build()
     }
 
     override fun onDestroy() {
@@ -393,11 +466,14 @@ class BlackService : Service() {
         private const val TEST_BLACKOUT_MILLIS = 10_000L
         private const val TEST_STEP_GAP_MILLIS = 1_500L
         private const val TEST_PASSED_STATUS_MILLIS = 5_000L
+        private const val ADD_EXCEPTION_REQUEST = 4
+        private const val EXTRA_PACKAGE_NAME = "package_name"
         const val ACTION_START = "com.levabala.blackandroid.START"
         const val ACTION_STOP = "com.levabala.blackandroid.STOP"
         const val ACTION_UPDATE = "com.levabala.blackandroid.UPDATE"
         const val ACTION_CANCEL = "com.levabala.blackandroid.CANCEL"
         const val ACTION_TEST = "com.levabala.blackandroid.TEST"
+        const val ACTION_ADD_EXCEPTION = "com.levabala.blackandroid.ADD_EXCEPTION"
 
         fun command(context: Context, action: String) = Intent(context, BlackService::class.java).setAction(action)
         fun formatTime(millis: Long): String {

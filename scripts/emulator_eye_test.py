@@ -193,9 +193,10 @@ def main():
     command("shell", "pm", "clear", PACKAGE)
     command("logcat", "-c")
     command("shell", "appops", "set", PACKAGE, "SYSTEM_ALERT_WINDOW", "allow")
+    command("shell", "appops", "set", PACKAGE, "GET_USAGE_STATS", "allow")
     command("shell", "pm", "grant", PACKAGE, "android.permission.POST_NOTIFICATIONS")
     command("shell", "cmd", "statusbar", "collapse")
-    command("shell", "am", "start", "-n", ACTIVITY)
+    command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
 
     capture("00-system-theme.png", "System theme", current_status() or "Stopped")
     command("shell", "input", "swipe", "540", "1800", "540", "700", "350")
@@ -217,6 +218,22 @@ def main():
     wait_appearance("DARK")
     wait_node(lambda node: node.attrib.get("text") == "Appearance", "Dark theme activity")
     capture("00-dark-theme.png", "Dark theme", current_status() or "Stopped")
+
+    tap_text("APP EXCEPTIONS")
+    wait_node(lambda node: "automatic pausing is active" in node.attrib.get("text", "").casefold(),
+              "usage access status")
+    tap_text("ADD APP")
+    search = wait_node(lambda node: node.attrib.get("class") == "android.widget.EditText", "app search")
+    tap_node(search)
+    command("shell", "input", "text", "galry")
+    gallery = wait_node(lambda node: node.attrib.get("text", "").casefold() == "gallery", "fuzzy Gallery result")
+    capture("00-app-picker.png", "Fuzzy app picker search", "galry → Gallery")
+    tap_node(gallery)
+    wait_node(lambda node: node.attrib.get("text", "").casefold() == "gallery", "Gallery exception")
+    capture("00-exception-list.png", "Scrollable exception list", "Gallery added")
+    tap_text("REMOVE")
+    wait_node(lambda node: node.attrib.get("text") == "No app exceptions yet.", "empty exception list")
+    command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
 
     command("shell", "input", "swipe", "540", "700", "540", "1800", "350")
     command("shell", "input", "swipe", "540", "700", "540", "1800", "350")
@@ -251,7 +268,25 @@ def main():
     wait_warning_notification(18)
     command("shell", "cmd", "statusbar", "expand-notifications")
     time.sleep(0.8)
-    capture("03-notification.png", "Test notification with Cancel action", current_status())
+    exception_action = wait_node(
+        lambda node: node.attrib.get("text", "").casefold().startswith("except "),
+        "notification exception action",
+    )
+    capture("03-notification.png", "Test notification with Cancel and exception actions", current_status())
+    tap_node(exception_action)
+    command("shell", "cmd", "statusbar", "collapse")
+    capture("03-exception-pause.png", "Notification action paused the timer",
+            wait_status_contains("Paused for", 6))
+    command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
+    tap_text("APP EXCEPTIONS")
+    tap_text("REMOVE")
+    wait_node(lambda node: node.attrib.get("text") == "No app exceptions yet.", "removed notification exception")
+    command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
+    tap_text("TEST ALL FUNCTIONS")
+    wait_status("Test 1/3", 8)
+    wait_warning_notification(18)
+    command("shell", "cmd", "statusbar", "expand-notifications")
+    time.sleep(0.8)
     tap_text("Cancel")
     command("shell", "cmd", "statusbar", "collapse")
     wait_warning_notification_gone()
@@ -304,6 +339,9 @@ def main():
         "user.blackout_cancel",
         "service.test_step_passed",
         "service.test_passed",
+        "user.exception_added",
+        "user.exception_removed",
+        "service.exception_pause_changed",
         "service.screen_availability_changed",
         "service.stop_command",
     }
