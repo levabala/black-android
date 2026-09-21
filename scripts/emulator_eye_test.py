@@ -176,23 +176,24 @@ def main():
     command("shell", "cmd", "statusbar", "collapse")
     command("shell", "am", "start", "-n", ACTIVITY)
 
-    wait_node(lambda node: node.attrib.get("text") == "Appearance", "Appearance setting")
     capture("00-system-theme.png", "System theme", current_status() or "Stopped")
     command("shell", "input", "swipe", "540", "1800", "540", "700", "350")
     wait_node(lambda node: node.attrib.get("text", "").casefold() == "check for updates", "Update control")
+    wait_node(lambda node: node.attrib.get("text") == "Appearance", "Appearance setting at bottom")
     capture("00-update-control.png", "In-app update control", current_status() or "Stopped")
-    command("shell", "input", "swipe", "540", "700", "540", "1800", "350")
     spinners = [node for node in ui().iter() if node.attrib.get("class") == "android.widget.Spinner"]
     if len(spinners) != 2:
         raise RuntimeError(f"Expected appearance and interval selectors, found {len(spinners)}")
-    tap_node(spinners[0])
+    # Appearance is the lower selector now; choosing by position keeps this check tied to the layout.
+    tap_node(max(spinners, key=lambda node: center(node)[1]))
     tap_text("Dark")
     wait_appearance("DARK")
     wait_node(lambda node: node.attrib.get("text") == "Appearance", "Dark theme activity")
     capture("00-dark-theme.png", "Dark theme", current_status() or "Stopped")
 
+    command("shell", "input", "swipe", "540", "700", "540", "1800", "350")
     spinners = [node for node in ui().iter() if node.attrib.get("class") == "android.widget.Spinner"]
-    tap_node(spinners[1])
+    tap_node(min(spinners, key=lambda node: center(node)[1]))
     tap_text("Seconds")
     set_number(0, 8)
     set_number(1, 18)

@@ -80,25 +80,6 @@ class MainActivity : Activity() {
         status = TextView(this).apply { textSize = 18f; setPadding(0, dp(12), 0, dp(18)) }
         root.addView(status)
 
-        root.addView(TextView(this).apply { text = "Appearance"; setPadding(0, dp(12), 0, 0) })
-        val appearance = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("System", "Light", "Dark"))
-            setSelection(store.appearance.ordinal)
-            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                    val selected = Appearance.entries[position]
-                    if (store.appearance != selected) {
-                        store.appearance = selected
-                        recreate()
-                    }
-                }
-
-                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-            }
-        }
-        root.addView(appearance)
-
         val intervalIsMinutes = saved.intervalMillis % 60_000L == 0L
         interval = numberField(root, "Interval", if (intervalIsMinutes) saved.intervalMillis / 60_000 else saved.intervalMillis / 1_000)
         intervalUnit = Spinner(this).apply {
@@ -153,6 +134,25 @@ class MainActivity : Activity() {
         }
         root.addView(updateStatus)
         updateButton = button(root, "Check for updates") { checkForUpdates() }
+
+        root.addView(TextView(this).apply { text = "Appearance"; setPadding(0, dp(18), 0, 0) })
+        val appearance = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("System", "Light", "Dark"))
+            setSelection(store.appearance.ordinal)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    val selected = Appearance.entries[position]
+                    if (store.appearance != selected) {
+                        store.appearance = selected
+                        recreate()
+                    }
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+        }
+        root.addView(appearance)
     }
 
     private fun checkForUpdates() {
