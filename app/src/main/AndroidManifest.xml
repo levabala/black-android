@@ -25,7 +25,8 @@
         android:name=".BlackApplication"
         android:allowBackup="false"
         android:label="Black"
-        android:icon="@android:drawable/ic_lock_idle_alarm"
+        android:icon="@drawable/app_icon"
+        android:roundIcon="@drawable/app_icon"
         android:theme="@style/BlackTheme">
 
         <activity
