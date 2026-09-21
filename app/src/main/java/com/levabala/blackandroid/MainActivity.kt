@@ -2,11 +2,13 @@ package com.levabala.blackandroid
 
 import android.Manifest
 import android.app.Activity
+import android.app.ActivityOptions
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -208,9 +210,18 @@ class MainActivity : Activity() {
         }
         pendingInstallerPermission = false
         updateStatus.text = "Preparing Android's installer…"
+        val callbackOptions = ActivityOptions.makeBasic().apply {
+            @Suppress("DEPRECATION")
+            val mode = if (Build.VERSION.SDK_INT >= 36) {
+                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE
+            } else {
+                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+            }
+            setPendingIntentCreatorBackgroundActivityStartMode(mode)
+        }.toBundle()
         val callback = PendingIntent.getActivity(this, INSTALL_UPDATE_REQUEST,
-            Intent(this, UpdateInstallActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+            Intent(this, UpdateInstallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE, callbackOptions)
         val updater = AppUpdater(applicationContext)
         Thread {
             try {
