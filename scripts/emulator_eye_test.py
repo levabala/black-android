@@ -113,6 +113,16 @@ def wait_status(prefix, timeout=30):
     raise RuntimeError(f"Expected status starting with {prefix!r}; last status: {current_status()!r}")
 
 
+def wait_status_contains(fragment, timeout=30):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        status = current_status()
+        if fragment in status:
+            return status
+        time.sleep(0.4)
+    raise RuntimeError(f"Expected status containing {fragment!r}; last status: {current_status()!r}")
+
+
 def wait_status_change(previous, timeout=8):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
@@ -192,16 +202,23 @@ def main():
     wait_node(lambda node: node.attrib.get("text", "").casefold() == "check for updates", "Update control")
     wait_node(lambda node: node.attrib.get("text") == "Appearance", "Appearance setting at bottom")
     capture("00-update-control.png", "In-app update control", current_status() or "Stopped")
+    # The guided-test explanation makes the page taller; bring the Appearance spinner
+    # completely above the navigation bar before tapping it.
+    command("shell", "input", "swipe", "540", "1800", "540", "1200", "250")
     spinners = [node for node in ui().iter() if node.attrib.get("class") == "android.widget.Spinner"]
     if len(spinners) != 2:
         raise RuntimeError(f"Expected appearance and interval selectors, found {len(spinners)}")
     # Appearance is the lower selector now; choosing by position keeps this check tied to the layout.
-    tap_node(max(spinners, key=lambda node: center(node)[1]))
+    appearance_spinner = max(spinners, key=lambda node: center(node)[1])
+    appearance_bounds = [int(value) for value in re.findall(r"\d+", appearance_spinner.attrib["bounds"])]
+    # Tap near the top because the emulator's navigation bar overlaps the spinner's center.
+    command("shell", "input", "tap", str(center(appearance_spinner)[0]), str(appearance_bounds[1] + 24))
     tap_text("Dark")
     wait_appearance("DARK")
     wait_node(lambda node: node.attrib.get("text") == "Appearance", "Dark theme activity")
     capture("00-dark-theme.png", "Dark theme", current_status() or "Stopped")
 
+    command("shell", "input", "swipe", "540", "700", "540", "1800", "350")
     command("shell", "input", "swipe", "540", "700", "540", "1800", "350")
     spinners = [node for node in ui().iter() if node.attrib.get("class") == "android.widget.Spinner"]
     tap_node(min(spinners, key=lambda node: center(node)[1]))
@@ -226,26 +243,30 @@ def main():
     recovered = wait_status("Next warning")
     capture("01-recovered.png", "Enabled schedule recovered after process stop",
             wait_status_change(recovered))
-    command("shell", "input", "keyevent", "KEYCODE_HOME")
-
-    warning_status = wait_status("Blackout in", 20)
+    tap_text("TEST ALL FUNCTIONS")
+    warning_status = wait_status("Test 1/3", 8)
     if status_seconds(warning_status) > 10 and warning_notification_active():
         raise RuntimeError(f"The warning notification appeared too early: {warning_status!r}")
-    capture("02-warning.png", "Warning overlay over home screen", warning_status)
+    capture("02-test-notification.png", "Guided test asks for notification cancellation", warning_status)
     wait_warning_notification(18)
     command("shell", "cmd", "statusbar", "expand-notifications")
     time.sleep(0.8)
-    capture("03-notification.png", "10-second notification with Cancel action", current_status())
+    capture("03-notification.png", "Test notification with Cancel action", current_status())
     tap_text("Cancel")
     command("shell", "cmd", "statusbar", "collapse")
-    time.sleep(0.5)
-    capture("04-notification-cancel.png", "Notification action restarted countdown", wait_status("Next warning", 5))
     wait_warning_notification_gone()
+    wait_status("Test 2/3", 5)
+    capture("04-warning-cancel.png", "Guided test asks for warning cancellation",
+            wait_status_contains("Blackout in", 5))
+    # UI Automator exposes the launcher below an application-overlay window, so tap the
+    # centered Cancel button using the stable overlay layout verified by the screenshot.
+    command("shell", "input", "tap", "540", "340")
 
-    capture("05-blackout.png", "Blackout overlay", wait_status("Blackout:", 45))
+    wait_status("Test 3/3", 5)
+    capture("05-blackout.png", "Guided test blackout", wait_status_contains("· Blackout:", 18))
     wait_warning_notification_gone()
     command("shell", "input tap 540 1100; sleep 0.2; input tap 540 1100; sleep 0.2; input tap 540 1100")
-    capture("06-three-taps.png", "Three taps restarted countdown", wait_status("Next warning", 5))
+    capture("06-three-taps.png", "Guided test passed all three actions", wait_status_contains("Test passed", 5))
 
     command("shell", "input", "keyevent", "26")
     locked_status = wait_status("Paused while locked", 5)
@@ -281,6 +302,8 @@ def main():
         "service.warning_notification_posted",
         "service.warning_notification_removed",
         "user.blackout_cancel",
+        "service.test_step_passed",
+        "service.test_passed",
         "service.screen_availability_changed",
         "service.stop_command",
     }

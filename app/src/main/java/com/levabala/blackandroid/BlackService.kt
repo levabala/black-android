@@ -22,6 +22,14 @@ import android.provider.Settings
 import kotlin.math.ceil
 
 class BlackService : Service() {
+    private enum class TestStep {
+        NOTIFICATION_CANCEL,
+        WARNING_CANCEL,
+        BLACKOUT_CANCEL,
+    }
+
+    private enum class CancelSource { NOTIFICATION, OVERLAY }
+
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var store: SettingsStore
     private lateinit var timer: SchedulerCore
@@ -33,6 +41,16 @@ class BlackService : Service() {
     private var warningNotificationSent = false
     private var lastHealthLoggedAt = 0L
     private var lastMicrophoneActive: Boolean? = null
+    private var testStep: TestStep? = null
+    private var testPassedUntil = 0L
+    private val startTestStep = Runnable {
+        val now = SystemClock.elapsedRealtime()
+        if (testStep != null && timer.phase == Phase.COUNTDOWN) {
+            timer.testNow(now, TEST_WARNING_MILLIS, TEST_BLACKOUT_MILLIS)
+            AppLog.info("service.test_step_started", mapOf("step" to testStepName()))
+            render()
+        }
+    }
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -47,6 +65,7 @@ class BlackService : Service() {
                 "phase_before" to previousPhase.name.lowercase(),
                 "phase_after" to timer.phase.name.lowercase(),
             ))
+            resumeTestStepIfReady()
             render()
         }
     }
@@ -64,6 +83,7 @@ class BlackService : Service() {
                     ))
                     lastMicrophoneActive = active
                 }
+                resumeTestStepIfReady()
                 render()
             }
         }
@@ -83,7 +103,10 @@ class BlackService : Service() {
                 stopSelf()
                 return
             }
-            timer.tick(SystemClock.elapsedRealtime())
+            val now = SystemClock.elapsedRealtime()
+            val phaseBefore = timer.phase
+            timer.tick(now)
+            keepTestMoving(phaseBefore, now)
             render()
             logHealthIfDue()
             handler.postDelayed(this, 500)
@@ -144,16 +167,15 @@ class BlackService : Service() {
         }
         when (intent?.action) {
             ACTION_UPDATE -> {
+                endTest(now, passed = false)
                 timer.updateSettings(store.load(), now)
                 AppLog.info("service.settings_updated")
             }
             ACTION_CANCEL -> {
-                timer.cancel(now)
-                AppLog.info("user.blackout_cancel", mapOf("source" to "notification"))
+                cancel(CancelSource.NOTIFICATION)
             }
             ACTION_TEST -> {
-                timer.testNow(now)
-                AppLog.info("service.test_started")
+                startGuidedTest(now)
             }
         }
         render()
@@ -161,19 +183,107 @@ class BlackService : Service() {
     }
 
     private fun cancel() {
-        timer.cancel(SystemClock.elapsedRealtime())
-        AppLog.info("user.blackout_cancel", mapOf("source" to "overlay"))
+        cancel(CancelSource.OVERLAY)
+    }
+
+    private fun cancel(source: CancelSource) {
+        val now = SystemClock.elapsedRealtime()
+        val phaseBefore = timer.phase
+        val canceled = timer.cancel(now)
+        AppLog.info("user.blackout_cancel", mapOf(
+            "source" to source.name.lowercase(),
+            "phase" to phaseBefore.name.lowercase(),
+            "test_step" to (testStepName()),
+            "accepted" to canceled,
+        ))
+        val stepPassed = when (testStep) {
+            TestStep.NOTIFICATION_CANCEL -> source == CancelSource.NOTIFICATION && phaseBefore == Phase.WARNING
+            TestStep.WARNING_CANCEL -> source == CancelSource.OVERLAY && phaseBefore == Phase.WARNING
+            TestStep.BLACKOUT_CANCEL -> source == CancelSource.OVERLAY && phaseBefore == Phase.BLACKOUT
+            null -> false
+        }
+        if (stepPassed) {
+            AppLog.info("service.test_step_passed", mapOf("step" to testStepName()))
+            when (testStep) {
+                TestStep.NOTIFICATION_CANCEL -> advanceTest(TestStep.WARNING_CANCEL)
+                TestStep.WARNING_CANCEL -> advanceTest(TestStep.BLACKOUT_CANCEL)
+                TestStep.BLACKOUT_CANCEL -> endTest(now, passed = true)
+                null -> Unit
+            }
+        } else if (testStep != null && canceled) {
+            AppLog.warn("service.test_wrong_action", mapOf(
+                "step" to testStepName(),
+                "source" to source.name.lowercase(),
+                "phase" to phaseBefore.name.lowercase(),
+            ))
+            scheduleTestStep()
+        }
         render()
+    }
+
+    private fun startGuidedTest(now: Long) {
+        handler.removeCallbacks(startTestStep)
+        testPassedUntil = 0
+        testStep = TestStep.NOTIFICATION_CANCEL
+        if (timer.phase == Phase.WARNING || timer.phase == Phase.BLACKOUT) timer.cancel(now)
+        if (timer.phase == Phase.COUNTDOWN) {
+            timer.testNow(now, TEST_WARNING_MILLIS, TEST_BLACKOUT_MILLIS)
+        }
+        AppLog.info("service.test_started", mapOf("step" to testStepName()))
+    }
+
+    private fun advanceTest(next: TestStep) {
+        testStep = next
+        scheduleTestStep()
+    }
+
+    private fun scheduleTestStep() {
+        handler.removeCallbacks(startTestStep)
+        handler.postDelayed(startTestStep, TEST_STEP_GAP_MILLIS)
+    }
+
+    private fun resumeTestStepIfReady() {
+        if (testStep != null && timer.phase == Phase.COUNTDOWN) scheduleTestStep()
+    }
+
+    private fun keepTestMoving(phaseBefore: Phase, now: Long) {
+        val step = testStep ?: return
+        val missedWarningAction = step != TestStep.BLACKOUT_CANCEL && timer.phase == Phase.BLACKOUT
+        val missedBlackoutAction = step == TestStep.BLACKOUT_CANCEL &&
+            phaseBefore == Phase.BLACKOUT && timer.phase == Phase.COUNTDOWN
+        if (missedWarningAction || missedBlackoutAction) {
+            AppLog.warn("service.test_step_timed_out", mapOf("step" to testStepName()))
+            if (timer.phase == Phase.BLACKOUT) timer.cancel(now)
+            scheduleTestStep()
+        }
+    }
+
+    private fun endTest(now: Long, passed: Boolean) {
+        if (testStep == null) return
+        handler.removeCallbacks(startTestStep)
+        AppLog.info(if (passed) "service.test_passed" else "service.test_stopped")
+        testStep = null
+        if (passed) testPassedUntil = now + TEST_PASSED_STATUS_MILLIS
+    }
+
+    private fun testStepName(): String = testStep?.name?.lowercase() ?: "none"
+
+    private fun testInstruction(): String? = when (testStep) {
+        TestStep.NOTIFICATION_CANCEL -> "Test 1/3: open the notification and tap Cancel"
+        TestStep.WARNING_CANCEL -> "Test 2/3: tap Cancel blackout below"
+        TestStep.BLACKOUT_CANCEL -> "Test 3/3: wait for black, then tap it three times"
+        null -> null
     }
 
     private fun render() {
         val now = SystemClock.elapsedRealtime()
         when (timer.phase) {
-            Phase.WARNING -> overlay.showWarning(ceil(timer.remainingMillis(now) / 1000.0).toLong())
+            Phase.WARNING -> overlay.showWarning(
+                ceil(timer.remainingMillis(now) / 1000.0).toLong(), testInstruction())
             Phase.BLACKOUT -> overlay.showBlackout()
             else -> overlay.remove()
         }
-        val status = when (timer.phase) {
+        val baseStatus = when (timer.phase) {
             Phase.STOPPED -> "Stopped"
             Phase.COUNTDOWN -> "Next warning in ${formatTime(timer.remainingMillis(now))}"
             Phase.WARNING -> "Blackout in ${formatTime(timer.remainingMillis(now))}"
@@ -181,15 +291,25 @@ class BlackService : Service() {
             Phase.MIC_PAUSED -> "Paused for microphone"
             Phase.LOCKED -> "Paused while locked: ${formatTime(timer.remainingMillis(now))} left"
         }
+        val status = when {
+            testStep != null && timer.phase == Phase.COUNTDOWN ->
+                "${testInstruction()} · starting shortly"
+            testStep != null -> "${testInstruction()} · $baseStatus"
+            now < testPassedUntil && timer.phase == Phase.COUNTDOWN -> "$baseStatus · Test passed"
+            else -> baseStatus
+        }
         if (status != lastStatus) {
             store.status = status
             lastStatus = status
         }
-        if (timer.phase == Phase.WARNING && timer.remainingMillis(now) < 10_000 && !warningNotificationSent) {
+        val warningNotificationNeeded = timer.phase == Phase.WARNING &&
+            timer.remainingMillis(now) < 10_000 &&
+            (testStep == null || testStep == TestStep.NOTIFICATION_CANCEL)
+        if (warningNotificationNeeded && !warningNotificationSent) {
             notifications.notify(WARNING_NOTIFICATION_ID, warningNotification())
             warningNotificationSent = true
             AppLog.info("service.warning_notification_posted")
-        } else if (timer.phase != Phase.WARNING && warningNotificationSent) {
+        } else if (!warningNotificationNeeded && warningNotificationSent) {
             notifications.cancel(WARNING_NOTIFICATION_ID)
             warningNotificationSent = false
             AppLog.info("service.warning_notification_removed")
@@ -226,7 +346,7 @@ class BlackService : Service() {
         val builder = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Black")
-            .setContentText("Timer running")
+            .setContentText(testInstruction() ?: "Timer running")
             .setContentIntent(open)
             .setOngoing(true)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build())
@@ -240,8 +360,8 @@ class BlackService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, WARNING_CHANNEL)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Blackout in 10 seconds")
-            .setContentText("Tap Cancel to skip this blackout")
+            .setContentTitle(if (testStep == TestStep.NOTIFICATION_CANCEL) "Test 1/3: notification Cancel" else "Blackout in 10 seconds")
+            .setContentText(if (testStep == TestStep.NOTIFICATION_CANCEL) "Tap Cancel to pass this step" else "Tap Cancel to skip this blackout")
             .setContentIntent(open)
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_REMINDER)
@@ -252,6 +372,7 @@ class BlackService : Service() {
     override fun onDestroy() {
         AppLog.info("service.destroyed", mapOf("phase" to timer.phase.name.lowercase()))
         handler.removeCallbacks(ticker)
+        handler.removeCallbacks(startTestStep)
         audio.unregisterAudioRecordingCallback(recordingCallback)
         unregisterReceiver(screenReceiver)
         overlay.remove()
@@ -268,6 +389,10 @@ class BlackService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val WARNING_NOTIFICATION_ID = 2
         private const val HEALTH_LOG_INTERVAL_MS = 5 * 60 * 1_000L
+        private const val TEST_WARNING_MILLIS = 10_000L
+        private const val TEST_BLACKOUT_MILLIS = 10_000L
+        private const val TEST_STEP_GAP_MILLIS = 1_500L
+        private const val TEST_PASSED_STATUS_MILLIS = 5_000L
         const val ACTION_START = "com.levabala.blackandroid.START"
         const val ACTION_STOP = "com.levabala.blackandroid.STOP"
         const val ACTION_UPDATE = "com.levabala.blackandroid.UPDATE"

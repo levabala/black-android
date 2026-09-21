@@ -19,7 +19,7 @@ class OverlayController(private val context: Context, private val onCancel: () -
     private var tapCount = 0
     private var firstTapAt = 0L
 
-    fun showWarning(secondsRemaining: Long) {
+    fun showWarning(secondsRemaining: Long, instruction: String? = null) {
         if (currentPhase != Phase.WARNING) {
             remove()
             val layout = LinearLayout(context).apply {
@@ -40,7 +40,7 @@ class OverlayController(private val context: Context, private val onCancel: () -
             add(layout, false)
             currentPhase = Phase.WARNING
         }
-        warningText?.text = "Blackout in $secondsRemaining seconds"
+        warningText?.text = listOfNotNull(instruction, "Blackout in $secondsRemaining seconds").joinToString("\n")
     }
 
     fun showBlackout() {

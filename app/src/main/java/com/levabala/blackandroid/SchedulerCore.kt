@@ -37,11 +37,13 @@ class SchedulerCore(initialSettings: BlackSettings) {
     private var microphoneActive = false
     private var screenAvailable = true
     private var lockedAtMillis: Long? = null
+    private var nextBlackoutMillisOverride: Long? = null
 
     fun start(now: Long, screenAvailable: Boolean, microphoneActive: Boolean) {
         this.screenAvailable = screenAvailable
         this.microphoneActive = microphoneActive
         lockedAtMillis = if (screenAvailable) null else now
+        nextBlackoutMillisOverride = null
         savedRemainingMillis = settings.intervalMillis
         phase = when {
             !screenAvailable -> Phase.LOCKED
@@ -55,6 +57,7 @@ class SchedulerCore(initialSettings: BlackSettings) {
         phase = Phase.STOPPED
         deadlineMillis = 0
         lockedAtMillis = null
+        nextBlackoutMillisOverride = null
     }
 
     fun updateSettings(newSettings: BlackSettings, now: Long) {
@@ -76,6 +79,9 @@ class SchedulerCore(initialSettings: BlackSettings) {
                     // An interrupted warning or blackout is discarded.
                     settings.intervalMillis
                 }
+                if (phase == Phase.WARNING || phase == Phase.BLACKOUT) {
+                    nextBlackoutMillisOverride = null
+                }
                 phase = Phase.MIC_PAUSED
                 deadlineMillis = 0
             }
@@ -95,6 +101,9 @@ class SchedulerCore(initialSettings: BlackSettings) {
                 phase == Phase.COUNTDOWN -> max(0, deadlineMillis - now)
                 phase == Phase.MIC_PAUSED -> savedRemainingMillis
                 else -> settings.intervalMillis
+            }
+            if (phase == Phase.WARNING || phase == Phase.BLACKOUT) {
+                nextBlackoutMillisOverride = null
             }
             lockedAtMillis = now
             phase = Phase.LOCKED
@@ -121,7 +130,9 @@ class SchedulerCore(initialSettings: BlackSettings) {
                     Phase.WARNING
                 }
                 Phase.WARNING -> {
-                    deadlineMillis = previousDeadline + settings.blackoutMillis
+                    deadlineMillis = previousDeadline +
+                        (nextBlackoutMillisOverride ?: settings.blackoutMillis)
+                    nextBlackoutMillisOverride = null
                     Phase.BLACKOUT
                 }
                 Phase.BLACKOUT -> {
@@ -140,13 +151,19 @@ class SchedulerCore(initialSettings: BlackSettings) {
         if (phase != Phase.WARNING && phase != Phase.BLACKOUT) return false
         phase = Phase.COUNTDOWN
         deadlineMillis = now + settings.intervalMillis
+        nextBlackoutMillisOverride = null
         return true
     }
 
-    fun testNow(now: Long): Boolean {
+    fun testNow(
+        now: Long,
+        warningMillis: Long = settings.warningMillis,
+        blackoutMillis: Long = settings.blackoutMillis,
+    ): Boolean {
         if (phase != Phase.COUNTDOWN) return false
         phase = Phase.WARNING
-        deadlineMillis = now + settings.warningMillis
+        deadlineMillis = now + warningMillis
+        nextBlackoutMillisOverride = blackoutMillis
         tick(now)
         return true
     }

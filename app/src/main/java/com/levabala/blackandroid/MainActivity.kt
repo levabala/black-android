@@ -128,7 +128,7 @@ class MainActivity : Activity() {
                 startService(BlackService.command(this, BlackService.ACTION_UPDATE))
             }
         }
-        button(root, "Test now") {
+        button(root, "Test all functions") {
             if (!store.enabled) {
                 AppLog.warn("user.test_rejected", mapOf("reason" to "schedule_stopped"))
                 Toast.makeText(this, "Start the schedule first", Toast.LENGTH_SHORT).show()
@@ -138,6 +138,10 @@ class MainActivity : Activity() {
                 moveTaskToBack(true)
             }
         }
+        root.addView(TextView(this).apply {
+            text = "Guided test: cancel once from the notification, cancel once from the warning, then triple-tap the blackout. Your normal settings resume afterward."
+            setPadding(0, 0, 0, dp(8))
+        })
         updateStatus = TextView(this).apply {
             text = "Updates are downloaded from GitHub Releases."
             setPadding(0, dp(18), 0, dp(6))

@@ -13,7 +13,7 @@ The app uses a foreground service and an Android application overlay. Android ma
 
 ## Controls and behavior
 
-- **Start** saves the settings and begins a full interval. **Stop** ends the service. **Save settings** restarts the interval with the new values. **Test now** starts the warning immediately.
+- **Start** saves the settings and begins a full interval. **Stop** ends the service. **Save settings** restarts the interval with the new values. **Test all functions** runs a guided, accelerated check of notification cancellation, warning cancellation, the blackout, and its three-tap dismissal. The normal saved settings resume afterward.
 - **Appearance** offers System, Light, and Dark themes. System follows the phone's appearance setting; the other choices override it for Black.
 - **Check for updates** reads the public GitHub Releases list, including previews. When a newer Black APK is available, it downloads it, verifies its checksum, package name, version, and signing certificate, then opens Android's installation confirmation. The installer callback is allowed to open only while Black is visible. The first update may require allowing installs from Black in Android settings.
 - The warning has a **Cancel blackout** button. With notifications enabled, a high-importance notification appears about 10 seconds before the blackout with a **Cancel** action. Three quick taps on the black screen cancel an active blackout. Canceling starts a fresh interval.
@@ -48,7 +48,7 @@ Start an Android 14+ emulator, build the APK, and run:
 python3 scripts/emulator_eye_test.py
 ```
 
-The script works only with an `emulator-*` ADB device. It reinstalls the APK, **clears Black's emulator app data**, grants overlay and notification permissions, captures System and Dark appearance, then sets an 8-second interval in the app. It checks the countdown, warning overlay, 10-second notification and its Cancel action, blackout overlay, three-tap dismissal, and screen-off and wake behavior. It stops the service at the end. Screenshots and a browsable gallery are written to `artifacts/eye-tests/index.html`. Run the same command again for another pass. The generated artifacts are ignored by Git. Add `--include-reboot` for the slower boot recovery check.
+The script works only with an `emulator-*` ADB device. It reinstalls the APK, **clears Black's emulator app data**, grants overlay and notification permissions, captures System and Dark appearance, then sets an 8-second interval in the app. It runs the same guided test available from **Test all functions**, including notification cancellation, warning cancellation, blackout display, and three-tap dismissal. It also checks countdown recovery plus screen-off and wake behavior, then stops the service. Screenshots and a browsable gallery are written to `artifacts/eye-tests/index.html`. Run the same command again for another pass. The generated artifacts are ignored by Git. Add `--include-reboot` for the slower boot recovery check.
 
 If you need an emulator, install the Android SDK packages `emulator` and `system-images;android-36;default;arm64-v8a`, then create an AVD with `avdmanager create avd -n black_api36 -k 'system-images;android-36;default;arm64-v8a'`. Start it with `emulator -avd black_api36` before running the script.
 

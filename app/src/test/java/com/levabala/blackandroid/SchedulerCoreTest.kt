@@ -84,6 +84,17 @@ class SchedulerCoreTest {
         assertEquals(Phase.WARNING, timer.phase)
     }
 
+    @Test fun testNowCanUseASeparateShortWarningWithoutChangingSettings() {
+        val timer = SchedulerCore(settings.copy(warningMillis = 120_000))
+        timer.start(0, true, false)
+        assertTrue(timer.testNow(1_000, 10_000, 5_000))
+        assertEquals(10_000, timer.remainingMillis(1_000))
+        assertEquals(120_000, timer.settings.warningMillis)
+        timer.tick(11_000)
+        assertEquals(Phase.BLACKOUT, timer.phase)
+        assertEquals(5_000, timer.remainingMillis(11_000))
+    }
+
     @Test fun lateTickCatchesUpWithoutLengtheningBlackout() {
         val timer = SchedulerCore(settings)
         timer.start(1_000, true, false)
