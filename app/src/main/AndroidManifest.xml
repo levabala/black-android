@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
+        android:name=".BlackApplication"
         android:allowBackup="false"
         android:label="Black"
         android:icon="@android:drawable/ic_lock_idle_alarm"
