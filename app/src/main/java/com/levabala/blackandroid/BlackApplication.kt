@@ -15,26 +15,28 @@ class BlackApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         val clientToken = BuildConfig.DATADOG_RUM_CLIENT_TOKEN
-        if (clientToken.isBlank()) return
+        if (clientToken.isNotBlank()) {
+            val configuration = Configuration.Builder(
+                clientToken = clientToken,
+                env = "production",
+                variant = BuildConfig.BUILD_TYPE,
+            ).useSite(DatadogSite.EU1).build()
+            Datadog.initialize(this, configuration, TrackingConsent.GRANTED)
 
-        val configuration = Configuration.Builder(
-            clientToken = clientToken,
-            env = "production",
-            variant = BuildConfig.BUILD_TYPE,
-        ).useSite(DatadogSite.EU1).build()
-        Datadog.initialize(this, configuration, TrackingConsent.GRANTED)
+            Logs.enable(LogsConfiguration.Builder().build())
+            AppLog.initialize()
 
-        Logs.enable(LogsConfiguration.Builder().build())
-        AppLog.initialize()
-
-        Rum.enable(
-            RumConfiguration.Builder(RUM_APPLICATION_ID)
-                .trackUserInteractions()
-                .trackLongTasks(100L)
-                .useViewTrackingStrategy(ActivityViewTrackingStrategy(trackExtras = false))
-                .build()
-        )
-        AppLog.info("app.initialized")
+            Rum.enable(
+                RumConfiguration.Builder(RUM_APPLICATION_ID)
+                    .trackUserInteractions()
+                    .trackLongTasks(100L)
+                    .useViewTrackingStrategy(ActivityViewTrackingStrategy(trackExtras = false))
+                    .build()
+            )
+            AppLog.info("app.initialized")
+        }
+        UpdateNotifications.clearIfInstalled(this)
+        UpdateCheckJobService.schedule(this)
     }
 
     private companion object {

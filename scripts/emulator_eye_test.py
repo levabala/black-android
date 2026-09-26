@@ -198,6 +198,16 @@ def main():
     command("shell", "cmd", "statusbar", "collapse")
     command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
 
+    update_job = ""
+    for _ in range(20):
+        update_job = command("shell", "cmd", "jobscheduler", "get-job-state", PACKAGE, "1401", check=False).strip()
+        if "waiting" in update_job or "ready" in update_job or "active" in update_job:
+            break
+        time.sleep(0.25)
+    if "waiting" not in update_job and "ready" not in update_job and "active" not in update_job:
+        raise RuntimeError(f"Daily update check was not scheduled: {update_job!r}")
+    print(f"PASS Daily update check scheduled: {update_job}", flush=True)
+
     capture("00-system-theme.png", "System theme", current_status() or "Stopped")
     command("shell", "input", "swipe", "540", "1800", "540", "700", "350")
     wait_node(lambda node: node.attrib.get("text", "").casefold() == "check for updates", "Update control")

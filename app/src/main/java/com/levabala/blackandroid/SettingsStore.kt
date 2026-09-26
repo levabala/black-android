@@ -25,6 +25,14 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("updateResult", null)
         set(value) = prefs.edit().putString("updateResult", value).apply()
 
+    var notifiedUpdateVersion: String?
+        get() = prefs.getString("notifiedUpdateVersion", null)
+        set(value) = prefs.edit().putString("notifiedUpdateVersion", value).apply()
+
+    var updateNotificationPermissionAsked: Boolean
+        get() = prefs.getBoolean("updateNotificationPermissionAsked", false)
+        set(value) = prefs.edit().putBoolean("updateNotificationPermissionAsked", value).apply()
+
     var exceptionPackages: Set<String>
         get() = prefs.getStringSet("exceptionPackages", emptySet())?.toSet() ?: emptySet()
         private set(value) = prefs.edit().putStringSet("exceptionPackages", value).apply()

@@ -172,6 +172,25 @@ class MainActivity : Activity() {
             }
         }
         root.addView(appearance)
+        if (!store.updateNotificationPermissionAsked) {
+            store.updateNotificationPermissionAsked = true
+            requestNotifications()
+        }
+        consumeUpdateNotificationIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeUpdateNotificationIntent(intent)
+    }
+
+    private fun consumeUpdateNotificationIntent(intent: Intent) {
+        if (intent.action != ACTION_UPDATE_FROM_NOTIFICATION) return
+        intent.action = Intent.ACTION_MAIN
+        UpdateNotifications.dismiss(this)
+        AppLog.info("user.update_notification_tapped")
+        checkForUpdates()
     }
 
     private fun checkForUpdates() {
@@ -352,7 +371,8 @@ class MainActivity : Activity() {
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
-    private companion object {
-        const val INSTALL_UPDATE_REQUEST = 2
+    companion object {
+        const val ACTION_UPDATE_FROM_NOTIFICATION = "com.levabala.blackandroid.UPDATE_FROM_NOTIFICATION"
+        private const val INSTALL_UPDATE_REQUEST = 2
     }
 }
