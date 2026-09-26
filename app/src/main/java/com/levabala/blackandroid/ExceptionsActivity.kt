@@ -34,7 +34,7 @@ class ExceptionsActivity : Activity() {
         store = SettingsStore(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(28), dp(24), dp(24))
+            setPadding(dp(24), dp(8), dp(24), dp(8))
         }
         root.addView(TextView(this).apply { text = getString(R.string.exceptions_title); textSize = 26f })
         root.addView(TextView(this).apply {
@@ -83,6 +83,7 @@ class ExceptionsActivity : Activity() {
         root.addView(list, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
+        applySafeArea(root)
     }
 
     override fun onResume() {

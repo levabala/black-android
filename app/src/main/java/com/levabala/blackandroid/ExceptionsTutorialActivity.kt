@@ -8,13 +8,11 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 
 /** Screenshot guide for the system permission flow used by app exceptions. */
 class ExceptionsTutorialActivity : Activity() {
     private var step = 0
-    private lateinit var scroll: ScrollView
     private lateinit var count: TextView
     private lateinit var heading: TextView
     private lateinit var explanation: TextView
@@ -31,7 +29,7 @@ class ExceptionsTutorialActivity : Activity() {
         step = savedInstanceState?.getInt("step")?.coerceIn(0, STEPS.lastIndex) ?: 0
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(28), dp(16), dp(56))
+            setPadding(dp(16), dp(8), dp(16), dp(8))
         }
         root.addView(TextView(this).apply {
             text = getString(R.string.tutorial_title)
@@ -49,14 +47,9 @@ class ExceptionsTutorialActivity : Activity() {
         }
         root.addView(explanation)
         screenshot = ImageView(this).apply {
-            adjustViewBounds = true
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
-        scroll = ScrollView(this).apply {
-            addView(screenshot, ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        }
-        root.addView(scroll, LinearLayout.LayoutParams(
+        root.addView(screenshot, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         val controls = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         back = Button(this).apply {
@@ -79,6 +72,7 @@ class ExceptionsTutorialActivity : Activity() {
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(controls)
         setContentView(root)
+        applySafeArea(root)
         render()
     }
 
@@ -97,7 +91,6 @@ class ExceptionsTutorialActivity : Activity() {
         back.text = getString(R.string.tutorial_back)
         back.isEnabled = step > 0
         next.text = getString(if (step == STEPS.lastIndex) R.string.tutorial_done else R.string.tutorial_next)
-        scroll.post { scroll.scrollTo(0, 0) }
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()

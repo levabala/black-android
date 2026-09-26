@@ -26,7 +26,7 @@ class AppPickerActivity : Activity() {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(28), dp(24), dp(24))
+            setPadding(dp(24), dp(8), dp(24), dp(8))
         }
         root.addView(TextView(this).apply { text = getString(R.string.picker_title); textSize = 30f })
         val search = EditText(this).apply {
@@ -39,6 +39,7 @@ class AppPickerActivity : Activity() {
         root.addView(list, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
+        applySafeArea(root)
 
         allApps = AppCatalog.launchableApps(this)
         adapter = AppAdapter(allApps)

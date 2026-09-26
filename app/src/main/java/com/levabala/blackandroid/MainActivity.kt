@@ -73,10 +73,11 @@ class MainActivity : Activity() {
         val saved = store.load()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(28), dp(24), dp(24))
+            setPadding(dp(24), dp(8), dp(24), dp(8))
         }
         val scroll = ScrollView(this).apply { addView(root) }
         setContentView(scroll)
+        applySafeArea(root)
 
         root.addView(TextView(this).apply { text = getString(R.string.app_name); textSize = 30f })
         status = TextView(this).apply { textSize = 18f; setPadding(0, dp(12), 0, dp(18)) }

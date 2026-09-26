@@ -242,6 +242,8 @@ def main():
         tap_text("NEXT")
         wait_node(lambda node, step=step: node.attrib.get("text") == f"Step {step} of 5",
                   f"tutorial step {step}")
+        capture(f"00-exceptions-tutorial-{step}.png", f"Exceptions tutorial step {step}",
+                f"Step {step} of 5")
     tap_text("DONE")
     wait_node(lambda node: node.attrib.get("text", "").casefold() == "open black app info",
               "returned from tutorial")
