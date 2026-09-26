@@ -102,14 +102,14 @@
     <string name="updater_http_status">GitHub вернул код HTTP %1$d</string>
     <string name="tutorial_title">Как включить исключения</string>
     <string name="tutorial_step_count">Шаг %1$d из %2$d</string>
-    <string name="tutorial_step1_title">Распознайте блокировку</string>
-    <string name="tutorial_step1_body">Если Android сообщает об отказе в доступе или пишет, что настройка ограничена, Black пока не может получить доступ к истории использования.</string>
+    <string name="tutorial_step1_title">Проверьте доступ</string>
+    <string name="tutorial_step1_body">В настройках истории использования Black может быть помечен как «Запрещено». Если Android сообщает, что доступ ограничен, перейдите к следующим шагам.</string>
     <string name="tutorial_step2_title">Откройте сведения о Black</string>
     <string name="tutorial_step2_body">Вернитесь на экран исключений Black и нажмите «Открыть сведения о Black».</string>
     <string name="tutorial_step3_title">Разрешите ограниченные настройки</string>
     <string name="tutorial_step3_body">В сведениях о Black откройте меню с тремя точками и выберите «Разрешить ограниченные настройки». При необходимости подтвердите действие кодом разблокировки. Меню появляется, только если Android ограничил этот APK.</string>
     <string name="tutorial_step4_title">Предоставьте доступ к истории использования</string>
-    <string name="tutorial_step4_body">Вернитесь в Black, нажмите «Предоставить доступ к истории использования», выберите Black и включите переключатель доступа. На снимке он ещё заблокирован.</string>
+    <string name="tutorial_step4_body">Вернитесь в Black, нажмите «Предоставить доступ к истории использования», выберите Black и включите показанный переключатель. Если он заблокирован, повторите шаг 3.</string>
     <string name="tutorial_step5_title">Проверьте работу исключений</string>
     <string name="tutorial_step5_body">Вернитесь в «Исключения приложений». Там должно появиться сообщение о том, что автоматическая пауза работает. Теперь можно добавлять приложения в список.</string>
     <string name="tutorial_back">Назад</string>

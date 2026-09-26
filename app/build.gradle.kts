@@ -14,8 +14,8 @@ android {
         applicationId = "com.levabala.blackandroid"
         minSdk = 34
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.0.17"
+        versionCode = 19
+        versionName = "1.0.18"
         val rumClientToken = providers.gradleProperty("DATADOG_RUM_CLIENT_TOKEN")
             .orElse(providers.environmentVariable("DATADOG_RUM_CLIENT_TOKEN"))
             .getOrElse("pub2cd74be5015cad615a140947cdd73a54")

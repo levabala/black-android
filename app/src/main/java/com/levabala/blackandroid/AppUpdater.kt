@@ -127,7 +127,9 @@ class AppUpdater(private val context: Context) {
             setAppPackageName(packageName)
             setSize(file.length())
             setPackageSource(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE)
-            setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+            // Android permits an eligible installer to update itself without an extra tap.
+            // The callback still delivers PENDING_USER_ACTION when confirmation is needed.
+            setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
         val sessionId = installer.createSession(params)
         try {

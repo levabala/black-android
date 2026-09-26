@@ -191,6 +191,7 @@ def main():
     command("install", "-r", str(APK))
     # This script only runs on an emulator. Reset app data for a deterministic, cheap rerun.
     command("shell", "pm", "clear", PACKAGE)
+    command("shell", "cmd", "locale", "set-app-locales", PACKAGE, "--locales", "en-US")
     command("logcat", "-c")
     command("shell", "appops", "set", PACKAGE, "SYSTEM_ALERT_WINDOW", "allow")
     command("shell", "appops", "set", PACKAGE, "GET_USAGE_STATS", "ignore")

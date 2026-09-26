@@ -86,7 +86,8 @@ class ExceptionsTutorialActivity : Activity() {
         count.text = getString(R.string.tutorial_step_count, step + 1, STEPS.size)
         heading.text = getString(item.title)
         explanation.text = getString(item.body)
-        screenshot.setImageResource(item.image)
+        screenshot.setImageResource(if (resources.configuration.locales[0].language == "ru")
+            item.russianImage else item.englishImage)
         screenshot.contentDescription = getString(item.title)
         back.text = getString(R.string.tutorial_back)
         back.isEnabled = step > 0
@@ -95,15 +96,20 @@ class ExceptionsTutorialActivity : Activity() {
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
-    private data class Step(val title: Int, val body: Int, val image: Int)
+    private data class Step(val title: Int, val body: Int, val englishImage: Int, val russianImage: Int)
 
     private companion object {
         val STEPS = listOf(
-            Step(R.string.tutorial_step1_title, R.string.tutorial_step1_body, R.drawable.guide_denied),
-            Step(R.string.tutorial_step2_title, R.string.tutorial_step2_body, R.drawable.guide_exceptions),
-            Step(R.string.tutorial_step3_title, R.string.tutorial_step3_body, R.drawable.guide_app_info),
-            Step(R.string.tutorial_step4_title, R.string.tutorial_step4_body, R.drawable.guide_usage_blocked),
-            Step(R.string.tutorial_step5_title, R.string.tutorial_step5_body, R.drawable.guide_exceptions_active),
+            Step(R.string.tutorial_step1_title, R.string.tutorial_step1_body,
+                R.drawable.guide_denied, R.drawable.guide_denied_ru),
+            Step(R.string.tutorial_step2_title, R.string.tutorial_step2_body,
+                R.drawable.guide_exceptions_en, R.drawable.guide_exceptions),
+            Step(R.string.tutorial_step3_title, R.string.tutorial_step3_body,
+                R.drawable.guide_app_info, R.drawable.guide_app_info_ru),
+            Step(R.string.tutorial_step4_title, R.string.tutorial_step4_body,
+                R.drawable.guide_usage_blocked, R.drawable.guide_usage_blocked_ru),
+            Step(R.string.tutorial_step5_title, R.string.tutorial_step5_body,
+                R.drawable.guide_exceptions_active_en, R.drawable.guide_exceptions_active),
         )
     }
 }

@@ -5,7 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Bundle
 
-/** Receives installer callbacks privately, then opens Android's confirmation screen. */
+/** Receives installer callbacks, opening Android's confirmation screen when required. */
 class UpdateInstallActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
