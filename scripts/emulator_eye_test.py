@@ -193,7 +193,7 @@ def main():
     command("shell", "pm", "clear", PACKAGE)
     command("logcat", "-c")
     command("shell", "appops", "set", PACKAGE, "SYSTEM_ALERT_WINDOW", "allow")
-    command("shell", "appops", "set", PACKAGE, "GET_USAGE_STATS", "allow")
+    command("shell", "appops", "set", PACKAGE, "GET_USAGE_STATS", "ignore")
     command("shell", "pm", "grant", PACKAGE, "android.permission.POST_NOTIFICATIONS")
     command("shell", "cmd", "statusbar", "collapse")
     command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
@@ -229,6 +229,19 @@ def main():
     wait_node(lambda node: node.attrib.get("text") == "Appearance", "Dark theme activity")
     capture("00-dark-theme.png", "Dark theme", current_status() or "Stopped")
 
+    tap_text("APP EXCEPTIONS")
+    wait_node(lambda node: "usage access is required" in node.attrib.get("text", "").casefold(),
+              "missing usage access status")
+    wait_node(lambda node: node.attrib.get("text", "").casefold() == "open black app info",
+              "restricted settings help button")
+    capture("00-usage-access-help.png", "Restricted settings guidance", "Usage access not granted")
+    tap_text("OPEN BLACK APP INFO")
+    wait_node(lambda node: node.attrib.get("package") == "com.android.settings" and
+              node.attrib.get("text") == "Black", "Black app info in Android Settings")
+    capture("00-black-app-info.png", "Black app info shortcut", "Android Settings")
+    command("shell", "input", "keyevent", "KEYCODE_BACK")
+    command("shell", "appops", "set", PACKAGE, "GET_USAGE_STATS", "allow")
+    command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
     tap_text("APP EXCEPTIONS")
     wait_node(lambda node: "automatic pausing is active" in node.attrib.get("text", "").casefold(),
               "usage access status")

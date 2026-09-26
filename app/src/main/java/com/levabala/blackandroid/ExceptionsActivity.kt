@@ -4,7 +4,9 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -17,6 +19,8 @@ import android.widget.TextView
 class ExceptionsActivity : Activity() {
     private lateinit var store: SettingsStore
     private lateinit var accessStatus: TextView
+    private lateinit var restrictedHelp: TextView
+    private lateinit var appInfoButton: Button
     private lateinit var usageButton: Button
     private lateinit var empty: TextView
     private lateinit var list: ListView
@@ -39,6 +43,20 @@ class ExceptionsActivity : Activity() {
         })
         accessStatus = TextView(this).apply { setPadding(0, 0, 0, dp(6)) }
         root.addView(accessStatus)
+        restrictedHelp = TextView(this).apply {
+            text = "If Android says “Controlled by restricted setting,” open Black app info, tap the three-dot menu, and choose “Allow restricted settings.” Then return here and grant usage access."
+            setPadding(0, dp(8), 0, dp(8))
+        }
+        root.addView(restrictedHelp)
+        appInfoButton = Button(this).apply {
+            text = "Open Black app info"
+            setOnClickListener {
+                AppLog.info("permission.restricted_settings_help_opened")
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", packageName, null)))
+            }
+        }
+        root.addView(appInfoButton, matchWidth())
         usageButton = Button(this).apply {
             text = "Grant usage access"
             setOnClickListener {
@@ -75,6 +93,8 @@ class ExceptionsActivity : Activity() {
         } else {
             "Usage access is required to detect which app is in front."
         }
+        restrictedHelp.visibility = if (granted) View.GONE else View.VISIBLE
+        appInfoButton.visibility = if (granted) View.GONE else View.VISIBLE
         usageButton.text = if (granted) "Usage access settings" else "Grant usage access"
         val packages = store.exceptionPackages.sortedBy { AppCatalog.label(this, it).lowercase() }
         empty.visibility = if (packages.isEmpty()) View.VISIBLE else View.GONE
