@@ -35,13 +35,14 @@ class OverlayController(private val context: Context, private val onCancel: () -
             }
             layout.addView(warningText)
             layout.addView(Button(context).apply {
-                text = "Cancel blackout"
+                text = context.getString(R.string.action_cancel_blackout)
                 setOnClickListener { onCancel() }
             })
             add(layout, false)
             currentPhase = Phase.WARNING
         }
-        warningText?.text = listOfNotNull(instruction, "Blackout in $secondsRemaining seconds").joinToString("\n")
+        warningText?.text = listOfNotNull(instruction,
+            context.getString(R.string.overlay_warning_seconds, secondsRemaining)).joinToString("\n")
     }
 
     fun showBlackout() {
@@ -51,7 +52,7 @@ class OverlayController(private val context: Context, private val onCancel: () -
         firstTapAt = 0
         val black = View(context).apply {
             setBackgroundColor(Color.BLACK)
-            contentDescription = "Blackout. Tap three times quickly to cancel."
+            contentDescription = context.getString(R.string.overlay_blackout_description)
             setOnClickListener {
                 val now = android.os.SystemClock.uptimeMillis()
                 if (now - firstTapAt > 1_200) {

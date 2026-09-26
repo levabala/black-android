@@ -4,7 +4,7 @@ import android.content.Context
 
 enum class Appearance { SYSTEM, LIGHT, DARK }
 
-class SettingsStore(context: Context) {
+class SettingsStore(private val context: Context) {
     private val prefs = context.getSharedPreferences("black", Context.MODE_PRIVATE)
 
     var enabled: Boolean
@@ -12,7 +12,11 @@ class SettingsStore(context: Context) {
         set(value) = prefs.edit().putBoolean("enabled", value).apply()
 
     var status: String
-        get() = prefs.getString("status", "Stopped") ?: "Stopped"
+        get() = when (val saved = prefs.getString("status", null)) {
+            null, "Stopped" -> context.getString(R.string.status_stopped)
+            "Overlay permission needed" -> context.getString(R.string.status_overlay_permission)
+            else -> saved
+        }
         set(value) = prefs.edit().putString("status", value).apply()
 
     var appearance: Appearance

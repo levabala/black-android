@@ -46,13 +46,13 @@ class AppUpdater(private val context: Context) {
 
     fun latestUpdate(): ApkRelease? {
         val installedName = packageManager.getPackageInfo(packageName, 0).versionName
-            ?: throw IOException("The installed app has no version")
+            ?: throw IOException(context.getString(R.string.updater_no_version))
         val installed = ReleaseVersion.parse(installedName)
-            ?: throw IOException("The installed app version is not supported")
+            ?: throw IOException(context.getString(R.string.updater_unsupported_version))
         val connection = connect("https://api.github.com/repos/levabala/black-android/releases?per_page=30")
         val releases = try {
             val body = connection.inputStream.bufferedReader().use { it.readText() }
-            if (body.length > 1_000_000) throw IOException("GitHub release list is unexpectedly large")
+            if (body.length > 1_000_000) throw IOException(context.getString(R.string.updater_release_list_large))
             JSONArray(body)
         } finally {
             connection.disconnect()
@@ -97,21 +97,21 @@ class AppUpdater(private val context: Context) {
                         if (count < 0) break
                         bytes += count
                         if (bytes > release.size || bytes > MAX_APK_BYTES) {
-                            throw IOException("The downloaded APK is larger than the release asset")
+                            throw IOException(context.getString(R.string.updater_apk_large))
                         }
                         output.write(buffer, 0, count)
                         hash.update(buffer, 0, count)
                     }
                 }
             }
-            if (bytes != release.size) throw IOException("The APK download is incomplete")
+            if (bytes != release.size) throw IOException(context.getString(R.string.updater_apk_incomplete))
             val digest = "sha256:" + hash.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
             if (release.digest != null && !release.digest.equals(digest, ignoreCase = true)) {
-                throw IOException("The APK checksum does not match GitHub's release asset")
+                throw IOException(context.getString(R.string.updater_checksum_mismatch))
             }
             verifyPackage(pending, release)
-            if (ready.exists() && !ready.delete()) throw IOException("Could not replace the previous update")
-            if (!pending.renameTo(ready)) throw IOException("Could not prepare the downloaded update")
+            if (ready.exists() && !ready.delete()) throw IOException(context.getString(R.string.updater_cannot_replace))
+            if (!pending.renameTo(ready)) throw IOException(context.getString(R.string.updater_cannot_prepare))
             return ready
         } catch (error: Exception) {
             pending.delete()
@@ -149,23 +149,23 @@ class AppUpdater(private val context: Context) {
     private fun verifyPackage(file: File, release: ApkRelease) {
         val flags = PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong())
         val archive = packageManager.getPackageArchiveInfo(file.absolutePath, flags)
-            ?: throw IOException("The download is not a valid APK")
+            ?: throw IOException(context.getString(R.string.updater_invalid_apk))
         val installed = packageManager.getPackageInfo(packageName, flags)
         if (archive.packageName != packageName || archive.versionName != release.version.toString() ||
             archive.longVersionCode <= installed.longVersionCode) {
-            throw IOException("The APK is not a newer version of Black")
+            throw IOException(context.getString(R.string.updater_not_newer))
         }
         val newSigners = archive.signingInfo?.apkContentsSigners
         val currentSigners = installed.signingInfo?.apkContentsSigners
         if (newSigners.isNullOrEmpty() || currentSigners.isNullOrEmpty() ||
             !newSigners.contentEquals(currentSigners)) {
-            throw IOException("The APK is signed with a different key")
+            throw IOException(context.getString(R.string.updater_wrong_signature))
         }
     }
 
     private fun connect(address: String): HttpURLConnection {
         val url = URL(address)
-        if (url.protocol != "https") throw IOException("Update URLs must use HTTPS")
+        if (url.protocol != "https") throw IOException(context.getString(R.string.updater_https_only))
         val connection = url.openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 10_000
@@ -175,7 +175,7 @@ class AppUpdater(private val context: Context) {
             connection.setRequestProperty("Accept", "application/vnd.github+json")
             val status = connection.responseCode
             if (connection.url.protocol != "https" || status !in 200..299) {
-                throw IOException("GitHub returned HTTP $status")
+                throw IOException(context.getString(R.string.updater_http_status, status))
             }
             return connection
         } catch (error: Exception) {

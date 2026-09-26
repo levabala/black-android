@@ -103,7 +103,7 @@ class BlackService : Service() {
             if (!Settings.canDrawOverlays(this@BlackService)) {
                 AppLog.warn("service.stopping", mapOf("reason" to "overlay_permission_missing"))
                 overlay.remove()
-                store.status = "Overlay permission needed"
+                store.status = getString(R.string.status_overlay_permission)
                 stopSelf()
                 return
             }
@@ -128,10 +128,10 @@ class BlackService : Service() {
         foregroundApps = ForegroundAppTracker(this)
         AppLog.info("service.created")
         notifications.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Black schedule", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL, getString(R.string.channel_schedule), NotificationManager.IMPORTANCE_LOW)
         )
         notifications.createNotificationChannel(
-            NotificationChannel(WARNING_CHANNEL, "Blackout warnings", NotificationManager.IMPORTANCE_HIGH)
+            NotificationChannel(WARNING_CHANNEL, getString(R.string.channel_warnings), NotificationManager.IMPORTANCE_HIGH)
         )
         registerReceiver(screenReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -152,7 +152,7 @@ class BlackService : Service() {
                 "explicit" to (intent?.action == ACTION_STOP),
             ))
             store.enabled = false
-            store.status = "Stopped"
+            store.status = getString(R.string.status_stopped)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -300,9 +300,9 @@ class BlackService : Service() {
     private fun testStepName(): String = testStep?.name?.lowercase() ?: "none"
 
     private fun testInstruction(): String? = when (testStep) {
-        TestStep.NOTIFICATION_CANCEL -> "Test 1/3: open the notification and tap Cancel"
-        TestStep.WARNING_CANCEL -> "Test 2/3: tap Cancel blackout below"
-        TestStep.BLACKOUT_CANCEL -> "Test 3/3: wait for black, then tap it three times"
+        TestStep.NOTIFICATION_CANCEL -> getString(R.string.test_step_notification)
+        TestStep.WARNING_CANCEL -> getString(R.string.test_step_warning)
+        TestStep.BLACKOUT_CANCEL -> getString(R.string.test_step_blackout)
         null -> null
     }
 
@@ -335,19 +335,20 @@ class BlackService : Service() {
             else -> overlay.remove()
         }
         val baseStatus = when (timer.phase) {
-            Phase.STOPPED -> "Stopped"
-            Phase.COUNTDOWN -> "Next warning in ${formatTime(timer.remainingMillis(now))}"
-            Phase.WARNING -> "Blackout in ${formatTime(timer.remainingMillis(now))}"
-            Phase.BLACKOUT -> "Blackout: ${formatTime(timer.remainingMillis(now))} left"
-            Phase.MIC_PAUSED -> "Paused for microphone"
-            Phase.APP_PAUSED -> "Paused for ${currentExceptionPackage?.let { AppCatalog.label(this, it) } ?: "app exception"}"
-            Phase.LOCKED -> "Paused while locked: ${formatTime(timer.remainingMillis(now))} left"
+            Phase.STOPPED -> getString(R.string.status_stopped)
+            Phase.COUNTDOWN -> getString(R.string.status_next_warning, formatTime(timer.remainingMillis(now)))
+            Phase.WARNING -> getString(R.string.status_blackout_in, formatTime(timer.remainingMillis(now)))
+            Phase.BLACKOUT -> getString(R.string.status_blackout_left, formatTime(timer.remainingMillis(now)))
+            Phase.MIC_PAUSED -> getString(R.string.status_mic_paused)
+            Phase.APP_PAUSED -> getString(R.string.status_app_paused,
+                currentExceptionPackage?.let { AppCatalog.label(this, it) } ?: getString(R.string.status_app_exception))
+            Phase.LOCKED -> getString(R.string.status_locked, formatTime(timer.remainingMillis(now)))
         }
         val status = when {
             testStep != null && timer.phase == Phase.COUNTDOWN ->
-                "${testInstruction()} · starting shortly"
+                getString(R.string.status_starting_soon, testInstruction())
             testStep != null -> "${testInstruction()} · $baseStatus"
-            now < testPassedUntil && timer.phase == Phase.COUNTDOWN -> "$baseStatus · Test passed"
+            now < testPassedUntil && timer.phase == Phase.COUNTDOWN -> getString(R.string.status_test_passed, baseStatus)
             else -> baseStatus
         }
         if (status != lastStatus) {
@@ -404,11 +405,11 @@ class BlackService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Black")
-            .setContentText(testInstruction() ?: "Timer running")
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(testInstruction() ?: getString(R.string.notification_timer_running))
             .setContentIntent(open)
             .setOngoing(true)
-            .addAction(Notification.Action.Builder(null, "Stop", stop).build())
+            .addAction(Notification.Action.Builder(null, getString(R.string.action_stop), stop).build())
         return builder.build()
     }
 
@@ -419,13 +420,15 @@ class BlackService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = Notification.Builder(this, WARNING_CHANNEL)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle(if (testStep == TestStep.NOTIFICATION_CANCEL) "Test 1/3: notification Cancel" else "Blackout in 10 seconds")
-            .setContentText(if (testStep == TestStep.NOTIFICATION_CANCEL) "Tap Cancel to pass this step" else "Tap Cancel to skip this blackout")
+            .setContentTitle(getString(if (testStep == TestStep.NOTIFICATION_CANCEL)
+                R.string.notification_test_title else R.string.notification_warning_title))
+            .setContentText(getString(if (testStep == TestStep.NOTIFICATION_CANCEL)
+                R.string.notification_test_body else R.string.notification_warning_body))
             .setContentIntent(open)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_REMINDER)
-            .addAction(Notification.Action.Builder(null, "Cancel", cancel).build())
+            .addAction(Notification.Action.Builder(null, getString(R.string.action_cancel), cancel).build())
         currentForegroundPackage?.takeIf { it != packageName }?.let { foregroundPackage ->
             val addException = PendingIntent.getService(
                 this,
@@ -435,7 +438,7 @@ class BlackService : Service() {
             )
             builder.addAction(Notification.Action.Builder(
                 null,
-                "Except ${AppCatalog.label(this, foregroundPackage)}",
+                getString(R.string.action_except, AppCatalog.label(this, foregroundPackage)),
                 addException,
             ).build())
         }

@@ -19,7 +19,7 @@ class BootReceiver : BroadcastReceiver() {
             context.startForegroundService(BlackService.command(context, BlackService.ACTION_START))
         } else if (store.enabled) {
             AppLog.warn("service.restart_blocked", mapOf("reason" to "overlay_permission_missing"))
-            store.status = "Overlay permission needed"
+            store.status = context.getString(R.string.status_overlay_permission)
         }
     }
 }

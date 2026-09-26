@@ -19,20 +19,22 @@ class UpdateInstallActivity : Activity() {
                 val confirmation = intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
                 if (confirmation == null) {
                     AppLog.warn("update.confirmation_missing")
-                    showResult("Android did not provide an installation prompt.")
+                    showResult(getString(R.string.installer_prompt_missing))
                 } else {
                     try {
                         AppLog.info("update.confirmation_opened")
                         startActivity(confirmation)
                     } catch (error: Exception) {
                         AppLog.error("update.confirmation_failed", error)
-                        showResult("Could not open Android's installer: ${error.message ?: "unknown error"}")
+                        showResult(getString(R.string.installer_open_failed,
+                            error.message ?: getString(R.string.main_unknown_error)))
                     }
                 }
             }
-            PackageInstaller.STATUS_SUCCESS -> showResult("Update installed.")
-            else -> showResult("Installation failed or was canceled: " +
-                (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "unknown reason"))
+            PackageInstaller.STATUS_SUCCESS -> showResult(getString(R.string.installer_installed))
+            else -> showResult(getString(R.string.installer_failed,
+                intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                    ?: getString(R.string.installer_unknown_reason)))
         }
         finish()
     }

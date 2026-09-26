@@ -28,9 +28,9 @@ class AppPickerActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(28), dp(24), dp(24))
         }
-        root.addView(TextView(this).apply { text = "Add app exception"; textSize = 30f })
+        root.addView(TextView(this).apply { text = getString(R.string.picker_title); textSize = 30f })
         val search = EditText(this).apply {
-            hint = "Search apps"
+            hint = getString(R.string.picker_search)
             setSingleLine(true)
         }
         root.addView(search, LinearLayout.LayoutParams(
@@ -51,7 +51,8 @@ class AppPickerActivity : Activity() {
                 "package_name" to app.packageName,
                 "already_present" to !added,
             ))
-            Toast.makeText(this, if (added) "${app.label} added" else "${app.label} is already excepted", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(if (added) R.string.picker_added else R.string.picker_already_added,
+                app.label), Toast.LENGTH_SHORT).show()
             finish()
         }
         search.addTextChangedListener(object : TextWatcher {

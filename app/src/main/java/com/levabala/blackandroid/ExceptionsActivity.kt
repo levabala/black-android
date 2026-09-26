@@ -36,20 +36,24 @@ class ExceptionsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(28), dp(24), dp(24))
         }
-        root.addView(TextView(this).apply { text = "App exceptions"; textSize = 30f })
+        root.addView(TextView(this).apply { text = getString(R.string.exceptions_title); textSize = 26f })
         root.addView(TextView(this).apply {
-            text = "The timer pauses while an excepted app is in front and continues from the same point when you leave it."
+            text = getString(R.string.exceptions_explanation)
             setPadding(0, dp(12), 0, dp(12))
         })
+        root.addView(Button(this).apply {
+            text = getString(R.string.exceptions_tutorial)
+            setOnClickListener { startActivity(Intent(this@ExceptionsActivity, ExceptionsTutorialActivity::class.java)) }
+        }, matchWidth())
         accessStatus = TextView(this).apply { setPadding(0, 0, 0, dp(6)) }
         root.addView(accessStatus)
         restrictedHelp = TextView(this).apply {
-            text = "If Android says “Controlled by restricted setting,” open Black app info, tap the three-dot menu, and choose “Allow restricted settings.” Then return here and grant usage access."
+            text = getString(R.string.exceptions_restricted_help)
             setPadding(0, dp(8), 0, dp(8))
         }
         root.addView(restrictedHelp)
         appInfoButton = Button(this).apply {
-            text = "Open Black app info"
+            text = getString(R.string.exceptions_open_app_info)
             setOnClickListener {
                 AppLog.info("permission.restricted_settings_help_opened")
                 startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -58,7 +62,7 @@ class ExceptionsActivity : Activity() {
         }
         root.addView(appInfoButton, matchWidth())
         usageButton = Button(this).apply {
-            text = "Grant usage access"
+            text = getString(R.string.exceptions_grant_usage)
             setOnClickListener {
                 AppLog.info("permission.usage_access_requested")
                 startActivity(AppCatalog.usageAccessIntent())
@@ -66,11 +70,11 @@ class ExceptionsActivity : Activity() {
         }
         root.addView(usageButton, matchWidth())
         root.addView(Button(this).apply {
-            text = "Add app"
+            text = getString(R.string.exceptions_add_app)
             setOnClickListener { startActivity(Intent(this@ExceptionsActivity, AppPickerActivity::class.java)) }
         }, matchWidth())
         empty = TextView(this).apply {
-            text = "No app exceptions yet."
+            text = getString(R.string.exceptions_empty)
             gravity = Gravity.CENTER
             setPadding(0, dp(24), 0, dp(24))
         }
@@ -89,13 +93,13 @@ class ExceptionsActivity : Activity() {
     private fun refresh() {
         val granted = AppCatalog.usageAccessGranted(this)
         accessStatus.text = if (granted) {
-            "Usage access granted. Automatic pausing is active."
+            getString(R.string.exceptions_granted)
         } else {
-            "Usage access is required to detect which app is in front."
+            getString(R.string.exceptions_required)
         }
         restrictedHelp.visibility = if (granted) View.GONE else View.VISIBLE
         appInfoButton.visibility = if (granted) View.GONE else View.VISIBLE
-        usageButton.text = if (granted) "Usage access settings" else "Grant usage access"
+        usageButton.text = getString(if (granted) R.string.exceptions_usage_settings else R.string.exceptions_grant_usage)
         val packages = store.exceptionPackages.sortedBy { AppCatalog.label(this, it).lowercase() }
         empty.visibility = if (packages.isEmpty()) View.VISIBLE else View.GONE
         list.adapter = ExceptionAdapter(packages)
@@ -124,8 +128,9 @@ class ExceptionsActivity : Activity() {
                     })
                 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 addView(Button(this@ExceptionsActivity).apply {
-                    text = "Remove"
-                    contentDescription = "Remove ${AppCatalog.label(this@ExceptionsActivity, packageName)}"
+                    text = getString(R.string.exceptions_remove)
+                    contentDescription = getString(R.string.exceptions_remove_description,
+                        AppCatalog.label(this@ExceptionsActivity, packageName))
                     setOnClickListener {
                         store.removeException(packageName)
                         AppLog.info("user.exception_removed", mapOf("package_name" to packageName))

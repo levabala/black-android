@@ -45,7 +45,7 @@ class MainActivity : Activity() {
     private val refresh = object : Runnable {
         override fun run() {
             status.text = store.status
-            startStop.text = if (store.enabled) "Stop" else "Start"
+            startStop.text = getString(if (store.enabled) R.string.action_stop else R.string.action_start)
             handler.postDelayed(this, 500)
         }
     }
@@ -78,60 +78,60 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this).apply { addView(root) }
         setContentView(scroll)
 
-        root.addView(TextView(this).apply { text = "Black"; textSize = 30f })
+        root.addView(TextView(this).apply { text = getString(R.string.app_name); textSize = 30f })
         status = TextView(this).apply { textSize = 18f; setPadding(0, dp(12), 0, dp(18)) }
         root.addView(status)
 
         val intervalIsMinutes = saved.intervalMillis % 60_000L == 0L
-        interval = numberField(root, "Interval", if (intervalIsMinutes) saved.intervalMillis / 60_000 else saved.intervalMillis / 1_000)
+        interval = numberField(root, getString(R.string.main_interval), if (intervalIsMinutes) saved.intervalMillis / 60_000 else saved.intervalMillis / 1_000)
         intervalUnit = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("Minutes", "Seconds"))
+                listOf(getString(R.string.main_minutes), getString(R.string.main_seconds)))
             setSelection(if (intervalIsMinutes) 0 else 1)
         }
         root.addView(intervalUnit)
-        warning = numberField(root, "Warning (seconds)", saved.warningMillis / 1_000)
-        blackout = numberField(root, "Blackout (seconds)", saved.blackoutMillis / 1_000)
-        pauseMic = Switch(this).apply { text = "Pause while microphone is in use"; isChecked = saved.pauseForMicrophone }
+        warning = numberField(root, getString(R.string.main_warning_seconds), saved.warningMillis / 1_000)
+        blackout = numberField(root, getString(R.string.main_blackout_seconds), saved.blackoutMillis / 1_000)
+        pauseMic = Switch(this).apply { text = getString(R.string.main_pause_microphone); isChecked = saved.pauseForMicrophone }
         root.addView(pauseMic)
 
         val explanation = TextView(this).apply {
-            text = "The blackout covers app content. Android may keep system bars and the keyboard visible. Tap the blackout three times quickly to dismiss it."
+            text = getString(R.string.main_blackout_explanation)
             setPadding(0, dp(18), 0, dp(18))
         }
         root.addView(explanation)
 
-        startStop = button(root, "Start") {
+        startStop = button(root, getString(R.string.action_start)) {
             if (store.enabled) {
                 AppLog.info("user.schedule_stop")
                 store.enabled = false
-                store.status = "Stopped"
+                store.status = getString(R.string.status_stopped)
                 startService(BlackService.command(this, BlackService.ACTION_STOP))
             } else if (saveSettings()) {
                 if (!Settings.canDrawOverlays(this)) {
                     AppLog.warn("permission.overlay_requested")
-                    Toast.makeText(this, "Allow Black to display over other apps, then tap Start again", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, R.string.main_overlay_permission_request, Toast.LENGTH_LONG).show()
                     startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:$packageName")))
                     return@button
                 }
                 store.enabled = true
-                store.status = "Starting"
+                store.status = getString(R.string.status_starting)
                 AppLog.info("user.schedule_start")
                 startForegroundService(BlackService.command(this, BlackService.ACTION_START))
                 requestNotifications()
             }
         }
-        button(root, "Save settings") {
+        button(root, getString(R.string.main_save_settings)) {
             if (saveSettings() && store.enabled) {
                 AppLog.info("user.schedule_settings_applied")
                 startService(BlackService.command(this, BlackService.ACTION_UPDATE))
             }
         }
-        button(root, "Test all functions") {
+        button(root, getString(R.string.main_test_all)) {
             if (!store.enabled) {
                 AppLog.warn("user.test_rejected", mapOf("reason" to "schedule_stopped"))
-                Toast.makeText(this, "Start the schedule first", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.main_test_start_first, Toast.LENGTH_SHORT).show()
             } else {
                 AppLog.info("user.test_now")
                 startService(BlackService.command(this, BlackService.ACTION_TEST))
@@ -139,24 +139,24 @@ class MainActivity : Activity() {
             }
         }
         root.addView(TextView(this).apply {
-            text = "Guided test: cancel once from the notification, cancel once from the warning, then triple-tap the blackout. Your normal settings resume afterward."
+            text = getString(R.string.main_test_explanation)
             setPadding(0, 0, 0, dp(8))
         })
-        button(root, "App exceptions") {
+        button(root, getString(R.string.main_app_exceptions)) {
             AppLog.info("user.exceptions_opened")
             startActivity(Intent(this, ExceptionsActivity::class.java))
         }
         updateStatus = TextView(this).apply {
-            text = "Updates are downloaded from GitHub Releases."
+            text = getString(R.string.main_updates_explanation)
             setPadding(0, dp(18), 0, dp(6))
         }
         root.addView(updateStatus)
-        updateButton = button(root, "Check for updates") { checkForUpdates() }
+        updateButton = button(root, getString(R.string.main_check_updates)) { checkForUpdates() }
 
-        root.addView(TextView(this).apply { text = "Appearance"; setPadding(0, dp(18), 0, 0) })
+        root.addView(TextView(this).apply { text = getString(R.string.main_appearance); setPadding(0, dp(18), 0, 0) })
         val appearance = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("System", "Light", "Dark"))
+                listOf(getString(R.string.main_theme_system), getString(R.string.main_theme_light), getString(R.string.main_theme_dark)))
             setSelection(store.appearance.ordinal)
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -196,7 +196,7 @@ class MainActivity : Activity() {
     private fun checkForUpdates() {
         AppLog.info("user.update_check")
         updateButton.isEnabled = false
-        updateStatus.text = "Checking GitHub Releases…"
+        updateStatus.text = getString(R.string.main_checking_updates)
         val updater = AppUpdater(applicationContext)
         Thread {
             try {
@@ -205,7 +205,7 @@ class MainActivity : Activity() {
                     AppLog.info("update.up_to_date")
                     runOnUiThread {
                         if (!isDestroyed) {
-                            updateStatus.text = "Black is up to date."
+                            updateStatus.text = getString(R.string.main_up_to_date)
                             updateButton.isEnabled = true
                         }
                     }
@@ -213,13 +213,13 @@ class MainActivity : Activity() {
                 }
                 AppLog.info("update.available", mapOf("target_version" to release.version.toString()))
                 runOnUiThread {
-                    if (!isDestroyed) updateStatus.text = "Downloading Black ${release.version}…"
+                    if (!isDestroyed) updateStatus.text = getString(R.string.main_downloading_update, release.version.toString())
                 }
                 updater.downloadAndVerify(release)
                 AppLog.info("update.download_verified", mapOf("target_version" to release.version.toString()))
                 runOnUiThread {
                     if (!isDestroyed) {
-                        updateStatus.text = "Black ${release.version} is ready to install."
+                        updateStatus.text = getString(R.string.main_update_ready, release.version.toString())
                         installDownloadedUpdate()
                     }
                 }
@@ -227,7 +227,8 @@ class MainActivity : Activity() {
                 AppLog.error("update.failed", error)
                 runOnUiThread {
                     if (!isDestroyed) {
-                        updateStatus.text = "Update failed: ${error.message ?: "unknown error"}"
+                        updateStatus.text = getString(R.string.main_update_failed,
+                            error.message ?: getString(R.string.main_unknown_error))
                         updateButton.isEnabled = true
                     }
                 }
@@ -239,21 +240,21 @@ class MainActivity : Activity() {
         val file = File(cacheDir, "black-update.apk")
         if (!file.isFile) {
             AppLog.warn("update.apk_missing")
-            updateStatus.text = "The downloaded APK is gone. Check for updates again."
+            updateStatus.text = getString(R.string.main_apk_missing)
             updateButton.isEnabled = true
             return
         }
         if (!packageManager.canRequestPackageInstalls()) {
             AppLog.info("permission.install_packages_requested")
             pendingInstallerPermission = true
-            updateStatus.text = "Allow installs from Black in Android settings, then return here."
+            updateStatus.text = getString(R.string.main_allow_installs_return)
             startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Uri.parse("package:$packageName")))
             return
         }
         pendingInstallerPermission = false
         AppLog.info("update.installer_preparing", mapOf("apk_bytes" to file.length()))
-        updateStatus.text = "Preparing Android's installer…"
+        updateStatus.text = getString(R.string.main_preparing_installer)
         val callbackOptions = ActivityOptions.makeBasic().apply {
             @Suppress("DEPRECATION")
             val mode = if (Build.VERSION.SDK_INT >= 36) {
@@ -275,7 +276,8 @@ class MainActivity : Activity() {
                 AppLog.error("update.installer_failed", error)
                 runOnUiThread {
                     if (!isDestroyed) {
-                        updateStatus.text = "Could not start installation: ${error.message ?: "unknown error"}"
+                        updateStatus.text = getString(R.string.main_installer_failed,
+                            error.message ?: getString(R.string.main_unknown_error))
                         updateButton.isEnabled = true
                     }
                 }
@@ -296,7 +298,7 @@ class MainActivity : Activity() {
         if (intervalValue == null || intervalValue !in 1..intervalLimit || warningSeconds == null || warningSeconds !in 10..300 ||
             blackoutSeconds == null || blackoutSeconds !in 1..300) {
             AppLog.warn("settings.validation_failed")
-            Toast.makeText(this, "Use 1–1440 minutes or 1–86400 seconds, a 10–300 second warning, and a 1–300 second blackout", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, R.string.main_settings_validation, Toast.LENGTH_LONG).show()
             return false
         }
         val intervalMillis = intervalValue * if (intervalUnit.selectedItemPosition == 0) 60_000L else 1_000L
@@ -358,7 +360,7 @@ class MainActivity : Activity() {
                 installDownloadedUpdate()
             } else {
                 AppLog.warn("permission.install_packages_denied")
-                updateStatus.text = "Allow installs from Black to install the downloaded update."
+                updateStatus.text = getString(R.string.main_allow_installs)
                 updateButton.isEnabled = true
             }
         }

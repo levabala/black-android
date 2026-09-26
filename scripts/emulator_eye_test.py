@@ -235,6 +235,16 @@ def main():
     wait_node(lambda node: node.attrib.get("text", "").casefold() == "open black app info",
               "restricted settings help button")
     capture("00-usage-access-help.png", "Restricted settings guidance", "Usage access not granted")
+    tap_text("STEP-BY-STEP GUIDE")
+    wait_node(lambda node: node.attrib.get("text") == "Step 1 of 5", "tutorial first screenshot")
+    capture("00-exceptions-tutorial.png", "Five-step exceptions tutorial", "Step 1 of 5")
+    for step in range(2, 6):
+        tap_text("NEXT")
+        wait_node(lambda node, step=step: node.attrib.get("text") == f"Step {step} of 5",
+                  f"tutorial step {step}")
+    tap_text("DONE")
+    wait_node(lambda node: node.attrib.get("text", "").casefold() == "open black app info",
+              "returned from tutorial")
     tap_text("OPEN BLACK APP INFO")
     wait_node(lambda node: node.attrib.get("package") == "com.android.settings" and
               node.attrib.get("text") == "Black", "Black app info in Android Settings")

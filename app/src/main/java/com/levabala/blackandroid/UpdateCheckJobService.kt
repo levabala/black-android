@@ -86,7 +86,7 @@ object UpdateNotifications {
     fun show(context: Context, release: ApkRelease) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(
-            CHANNEL_ID, "App updates", NotificationManager.IMPORTANCE_DEFAULT))
+            CHANNEL_ID, context.getString(R.string.channel_updates), NotificationManager.IMPORTANCE_DEFAULT))
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED || !manager.areNotificationsEnabled() ||
             manager.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) {
@@ -107,12 +107,12 @@ object UpdateNotifications {
             }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE, launchOptions)
         val notification = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Black $version is available")
-            .setContentText("Tap Update to download and install it.")
+            .setContentTitle(context.getString(R.string.notification_update_title, version))
+            .setContentText(context.getString(R.string.notification_update_body))
             .setContentIntent(updateIntent)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
-            .addAction(Notification.Action.Builder(null, "Update", updateIntent).build())
+            .addAction(Notification.Action.Builder(null, context.getString(R.string.action_update), updateIntent).build())
             .build()
         manager.notify(NOTIFICATION_ID, notification)
         store.notifiedUpdateVersion = version
