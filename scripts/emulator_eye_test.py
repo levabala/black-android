@@ -298,6 +298,8 @@ def main():
     command("shell", "input", "tap", "540", "340")
 
     wait_status("Test 3/3", 5)
+    # Gallery opens without a permission prompt, which would hide third-party overlays.
+    command("shell", "am", "start", "-n", "com.android.gallery3d/.app.GalleryActivity")
     capture("05-blackout.png", "Guided test blackout", wait_status_contains("· Blackout:", 18))
     wait_warning_notification_gone()
     command("shell", "input tap 540 1100; sleep 0.2; input tap 540 1100; sleep 0.2; input tap 540 1100")

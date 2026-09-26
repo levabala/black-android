@@ -2,7 +2,7 @@
 
 Black runs a recurring on-screen blackout timer on Android 14 (API 34) and newer. The defaults match the Mac app: every 20 minutes it shows a 10 second warning, followed by a 20 second blackout. The interval can be set in minutes or seconds; warning and blackout durations can also be changed in the app.
 
-The app uses a foreground service and an Android application overlay. Android may keep system bars, permission screens, and the keyboard visible above the overlay. The ongoing "Timer running" notification is required while the service monitors the timer and microphone. The separate Cancel alert appears only during the last 10 seconds before blackout and is removed when the warning ends.
+The app uses a foreground service and an opaque Android application overlay that fills the available display area, including app window insets. Android may keep system bars, permission screens, picture-in-picture windows, and the keyboard visible above the overlay. The ongoing "Timer running" notification is required while the service monitors the timer and microphone. The separate Cancel alert appears only during the last 10 seconds before blackout and is removed when the warning ends.
 
 Optional app exceptions use Android's Usage Access permission to detect the app currently in front. While an excepted app is active, the countdown pauses and keeps its remaining time.
 

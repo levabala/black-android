@@ -2,6 +2,7 @@ package com.levabala.blackandroid
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.PixelFormat
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -73,10 +74,17 @@ class OverlayController(private val context: Context, private val onCancel: () -
             WindowManager.LayoutParams.MATCH_PARENT,
             if (fullScreen) WindowManager.LayoutParams.MATCH_PARENT else WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            -3,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                (if (fullScreen) WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS else 0),
+            if (fullScreen) PixelFormat.OPAQUE else PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = if (fullScreen) Gravity.FILL else Gravity.TOP
+            if (fullScreen) {
+                setFitInsetsTypes(0)
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
         }
         windowManager.addView(view, params)
         currentView = view
