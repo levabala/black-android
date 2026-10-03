@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var warning: EditText
     private lateinit var blackout: EditText
     private lateinit var pauseMic: Switch
+    private lateinit var paintedCancelOverlay: Switch
     private lateinit var updateButton: Button
     private lateinit var updateStatus: TextView
     private var pendingInstallerPermission = false
@@ -95,6 +96,11 @@ class MainActivity : Activity() {
         blackout = numberField(root, getString(R.string.main_blackout_seconds), saved.blackoutMillis / 1_000)
         pauseMic = Switch(this).apply { text = getString(R.string.main_pause_microphone); isChecked = saved.pauseForMicrophone }
         root.addView(pauseMic)
+        paintedCancelOverlay = Switch(this).apply {
+            text = getString(R.string.main_painted_cancel_overlay)
+            isChecked = saved.paintedCancelOverlay
+        }
+        root.addView(paintedCancelOverlay)
 
         val explanation = TextView(this).apply {
             text = getString(R.string.main_blackout_explanation)
@@ -304,12 +310,13 @@ class MainActivity : Activity() {
         }
         val intervalMillis = intervalValue * if (intervalUnit.selectedItemPosition == 0) 60_000L else 1_000L
         store.save(BlackSettings(intervalMillis, warningSeconds * 1_000,
-            blackoutSeconds * 1_000, pauseMic.isChecked))
+            blackoutSeconds * 1_000, pauseMic.isChecked, paintedCancelOverlay.isChecked))
         AppLog.info("settings.saved", mapOf(
             "interval_ms" to intervalMillis,
             "warning_ms" to warningSeconds * 1_000,
             "blackout_ms" to blackoutSeconds * 1_000,
             "pause_for_microphone" to pauseMic.isChecked,
+            "painted_cancel_overlay" to paintedCancelOverlay.isChecked,
         ))
         return true
     }

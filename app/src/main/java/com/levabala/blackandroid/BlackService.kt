@@ -236,7 +236,8 @@ class BlackService : Service() {
         if (stepPassed) {
             AppLog.info("service.test_step_passed", mapOf("step" to testStepName()))
             when (testStep) {
-                TestStep.NOTIFICATION_CANCEL -> advanceTest(TestStep.WARNING_CANCEL)
+                TestStep.NOTIFICATION_CANCEL -> advanceTest(if (timer.settings.paintedCancelOverlay)
+                    TestStep.WARNING_CANCEL else TestStep.BLACKOUT_CANCEL)
                 TestStep.WARNING_CANCEL -> advanceTest(TestStep.BLACKOUT_CANCEL)
                 TestStep.BLACKOUT_CANCEL -> endTest(now, passed = true)
                 null -> Unit
@@ -299,10 +300,12 @@ class BlackService : Service() {
 
     private fun testStepName(): String = testStep?.name?.lowercase() ?: "none"
 
+    private fun testStepCount(): Int = if (timer.settings.paintedCancelOverlay) 3 else 2
+
     private fun testInstruction(): String? = when (testStep) {
-        TestStep.NOTIFICATION_CANCEL -> getString(R.string.test_step_notification)
+        TestStep.NOTIFICATION_CANCEL -> getString(R.string.test_step_notification, testStepCount())
         TestStep.WARNING_CANCEL -> getString(R.string.test_step_warning)
-        TestStep.BLACKOUT_CANCEL -> getString(R.string.test_step_blackout)
+        TestStep.BLACKOUT_CANCEL -> getString(R.string.test_step_blackout, testStepCount())
         null -> null
     }
 
@@ -329,8 +332,9 @@ class BlackService : Service() {
     private fun render() {
         val now = SystemClock.elapsedRealtime()
         when (timer.phase) {
-            Phase.WARNING -> overlay.showWarning(
-                ceil(timer.remainingMillis(now) / 1000.0).toLong(), testInstruction())
+            Phase.WARNING -> if (timer.settings.paintedCancelOverlay) {
+                overlay.showWarning(ceil(timer.remainingMillis(now) / 1000.0).toLong(), testInstruction())
+            } else overlay.remove()
             Phase.BLACKOUT -> overlay.showBlackout()
             else -> overlay.remove()
         }
@@ -390,6 +394,7 @@ class BlackService : Service() {
             "remaining_ms" to timer.remainingMillis(now),
             "schedule_enabled" to store.enabled,
             "overlay_permission" to Settings.canDrawOverlays(this),
+            "painted_cancel_overlay" to timer.settings.paintedCancelOverlay,
             "usage_access" to AppCatalog.usageAccessGranted(this),
             "exception_count" to store.exceptionPackages.size,
             "exception_active" to (currentExceptionPackage != null),
@@ -420,8 +425,9 @@ class BlackService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = Notification.Builder(this, WARNING_CHANNEL)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle(getString(if (testStep == TestStep.NOTIFICATION_CANCEL)
-                R.string.notification_test_title else R.string.notification_warning_title))
+            .setContentTitle(if (testStep == TestStep.NOTIFICATION_CANCEL)
+                getString(R.string.notification_test_title, testStepCount())
+                else getString(R.string.notification_warning_title))
             .setContentText(getString(if (testStep == TestStep.NOTIFICATION_CANCEL)
                 R.string.notification_test_body else R.string.notification_warning_body))
             .setContentIntent(open)

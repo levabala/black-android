@@ -7,6 +7,7 @@ data class BlackSettings(
     val warningMillis: Long = 10 * 1000L,
     val blackoutMillis: Long = 20 * 1000L,
     val pauseForMicrophone: Boolean = true,
+    val paintedCancelOverlay: Boolean = false,
 )
 
 enum class Phase {

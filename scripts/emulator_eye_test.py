@@ -209,6 +209,7 @@ def main():
         raise RuntimeError(f"Daily update check was not scheduled: {update_job!r}")
     print(f"PASS Daily update check scheduled: {update_job}", flush=True)
 
+    wait_node(lambda node: node.attrib.get("text") == "Interval", "main settings loaded")
     capture("00-system-theme.png", "System theme", current_status() or "Stopped")
     command("shell", "input", "swipe", "540", "1800", "540", "700", "350")
     wait_node(lambda node: node.attrib.get("text", "").casefold() == "check for updates", "Update control")
@@ -227,6 +228,7 @@ def main():
     command("shell", "input", "tap", str(center(appearance_spinner)[0]), str(appearance_bounds[1] + 24))
     tap_text("Dark")
     wait_appearance("DARK")
+    command("shell", "input", "swipe", "540", "1800", "540", "700", "350")
     wait_node(lambda node: node.attrib.get("text") == "Appearance", "Dark theme activity")
     capture("00-dark-theme.png", "Dark theme", current_status() or "Stopped")
 
@@ -283,6 +285,11 @@ def main():
     values = [node.attrib.get("text") for node in ui().iter() if node.attrib.get("class") == "android.widget.EditText"]
     if values[:3] != ["8", "18", "20"]:
         raise RuntimeError(f"Timer fields were not set correctly: {values[:3]}")
+    overlay_switch = wait_node(
+        lambda node: node.attrib.get("text") == "Enable painted cancel overlay",
+        "painted cancel overlay setting")
+    if overlay_switch.attrib.get("checked") != "false":
+        raise RuntimeError("Painted cancel overlay must default to off")
     tap_text("START")
     capture("01-countdown.png", "Countdown with 8-second interval", wait_status("Next warning"))
     if warning_notification_active():
@@ -296,6 +303,37 @@ def main():
     recovered = wait_status("Next warning")
     capture("01-recovered.png", "Enabled schedule recovered after process stop",
             wait_status_change(recovered))
+    tap_text("TEST ALL FUNCTIONS")
+    wait_status("Test 1/2", 8)
+    wait_warning_notification(18)
+    windows = command("shell", "dumpsys", "window", "windows")
+    for section in re.split(r"Window #\d+", windows):
+        if PACKAGE in section and ("ty=APPLICATION_OVERLAY" in section or "ty=2038" in section):
+            raise RuntimeError("Painted warning overlay appeared with its setting off")
+    capture("01-native-only-warning.png", "Default warning uses native notification only", current_status())
+    command("shell", "cmd", "statusbar", "expand-notifications")
+    time.sleep(0.8)
+    tap_text("Cancel")
+    command("shell", "cmd", "statusbar", "collapse")
+    wait_warning_notification_gone()
+    wait_status("Test 2/2", 5)
+    command("shell", "am", "start", "-n", "com.android.gallery3d/.app.GalleryActivity")
+    capture("01-native-only-blackout.png", "Blackout still works with painted warning disabled",
+            wait_status_contains("· Blackout:", 18))
+    command("shell", "input tap 540 1100; sleep 0.2; input tap 540 1100; sleep 0.2; input tap 540 1100")
+    wait_status_contains("Test passed", 5)
+
+    command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
+    tap_text("Enable painted cancel overlay")
+    tap_text("SAVE SETTINGS")
+    # Recreate the activity to verify the setting was persisted.
+    command("shell", "am", "force-stop", PACKAGE)
+    command("shell", "am", "start", "-n", ACTIVITY)
+    enabled_switch = wait_node(
+        lambda node: node.attrib.get("text") == "Enable painted cancel overlay",
+        "saved painted overlay setting")
+    if enabled_switch.attrib.get("checked") != "true":
+        raise RuntimeError("Painted cancel overlay setting was not persisted")
     tap_text("TEST ALL FUNCTIONS")
     warning_status = wait_status("Test 1/3", 8)
     if status_seconds(warning_status) > 10 and warning_notification_active():

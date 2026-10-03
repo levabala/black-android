@@ -60,6 +60,7 @@ class SettingsStore(private val context: Context) {
         warningMillis = prefs.getLong("warningMillis", 10 * 1000L).coerceAtLeast(10 * 1000L),
         blackoutMillis = prefs.getLong("blackoutMillis", 20 * 1000L),
         pauseForMicrophone = prefs.getBoolean("pauseForMicrophone", true),
+        paintedCancelOverlay = prefs.getBoolean("paintedCancelOverlay", false),
     )
 
     fun save(settings: BlackSettings) {
@@ -68,6 +69,7 @@ class SettingsStore(private val context: Context) {
             .putLong("warningMillis", settings.warningMillis)
             .putLong("blackoutMillis", settings.blackoutMillis)
             .putBoolean("pauseForMicrophone", settings.pauseForMicrophone)
+            .putBoolean("paintedCancelOverlay", settings.paintedCancelOverlay)
             .remove("resetAfterLock")
             .apply()
     }

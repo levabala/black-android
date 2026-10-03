@@ -13,15 +13,15 @@
     <string name="status_locked">Пауза при блокировке: осталось %1$s</string>
     <string name="status_starting_soon">%1$s · скоро начнётся</string>
     <string name="status_test_passed">%1$s · проверка пройдена</string>
-    <string name="test_step_notification">Проверка 1/3: откройте уведомление и нажмите «Отменить»</string>
+    <string name="test_step_notification">Проверка 1/%1$d: откройте уведомление и нажмите «Отменить»</string>
     <string name="test_step_warning">Проверка 2/3: нажмите «Отменить затемнение»</string>
-    <string name="test_step_blackout">Проверка 3/3: дождитесь затемнения и быстро нажмите три раза</string>
+    <string name="test_step_blackout">Проверка %1$d/%1$d: дождитесь затемнения и быстро нажмите три раза</string>
     <string name="channel_schedule">Расписание Black</string>
     <string name="channel_warnings">Предупреждения о затемнении</string>
     <string name="channel_updates">Обновления приложения</string>
     <string name="notification_timer_running">Таймер работает</string>
     <string name="notification_warning_title">Затемнение через 10 секунд</string>
-    <string name="notification_test_title">Проверка 1/3: отмена в уведомлении</string>
+    <string name="notification_test_title">Проверка 1/%1$d: отмена в уведомлении</string>
     <string name="notification_warning_body">Нажмите «Отменить», чтобы пропустить затемнение</string>
     <string name="notification_test_body">Нажмите «Отменить», чтобы пройти этот шаг</string>
     <string name="notification_update_title">Доступна версия Black %1$s</string>
@@ -45,7 +45,7 @@
     <string name="main_save_settings">Сохранить настройки</string>
     <string name="main_test_all">Проверить все функции</string>
     <string name="main_test_start_first">Сначала запустите таймер</string>
-    <string name="main_test_explanation">Проверка: отмените затемнение через уведомление, затем через предупреждение, затем тремя нажатиями по чёрному экрану. После проверки вернутся ваши настройки.</string>
+    <string name="main_test_explanation">Проверка: отмените затемнение через уведомление, затем тремя нажатиями по чёрному экрану. Если панель отмены включена, её кнопка тоже проверяется. После проверки вернутся ваши настройки.</string>
     <string name="main_app_exceptions">Исключения приложений</string>
     <string name="main_updates_explanation">Обновления скачиваются из выпусков GitHub.</string>
     <string name="main_check_updates">Проверить обновления</string>
@@ -115,4 +115,5 @@
     <string name="tutorial_back">Назад</string>
     <string name="tutorial_next">Далее</string>
     <string name="tutorial_done">Готово</string>
+    <string name="main_painted_cancel_overlay">Показывать панель отмены поверх приложений</string>
 </resources>
