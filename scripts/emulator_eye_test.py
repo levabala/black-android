@@ -147,6 +147,11 @@ def capture(filename, label, status):
     print(f"PASS {label}: {status}", flush=True)
 
 
+def blackout_vibration_count():
+    return sum("overlay.blackout_end_vibration" in line
+               for line in command("logcat", "-d").splitlines())
+
+
 def warning_notification_active():
     dump = command("shell", "dumpsys", "notification", "--noredact")
     return bool(re.search(r"NotificationRecord[^\n]*\b(?:pkg=)?com\.levabala\.blackandroid[^\n]*\bid=2\b", dump))
@@ -365,6 +370,7 @@ def main():
     command("shell", "cmd", "statusbar", "collapse")
     wait_warning_notification_gone()
     wait_status("Test 2/3", 5)
+    vibrations_before_warning_cancel = blackout_vibration_count()
     capture("04-warning-cancel.png", "Guided test asks for warning cancellation",
             wait_status_contains("Blackout in", 5))
     # UI Automator exposes the launcher below an application-overlay window, so tap the
@@ -372,12 +378,16 @@ def main():
     command("shell", "input", "tap", "540", "340")
 
     wait_status("Test 3/3", 5)
+    if blackout_vibration_count() != vibrations_before_warning_cancel:
+        raise RuntimeError("Removing the warning panel triggered the blackout end vibration")
     # Gallery opens without a permission prompt, which would hide third-party overlays.
     command("shell", "am", "start", "-n", "com.android.gallery3d/.app.GalleryActivity")
     capture("05-blackout.png", "Guided test blackout", wait_status_contains("· Blackout:", 18))
     wait_warning_notification_gone()
     command("shell", "input tap 540 1100; sleep 0.2; input tap 540 1100; sleep 0.2; input tap 540 1100")
     capture("06-three-taps.png", "Guided test passed all three actions", wait_status_contains("Test passed", 5))
+    if blackout_vibration_count() != vibrations_before_warning_cancel + 1:
+        raise RuntimeError("Manual blackout dismissal must request exactly one vibration")
 
     command("shell", "input", "keyevent", "26")
     locked_status = wait_status("Paused while locked", 5)
@@ -389,6 +399,20 @@ def main():
     if status_seconds(wake_status) > locked_remaining:
         raise RuntimeError(f"Short lock reset the countdown: {locked_status!r} -> {wake_status!r}")
     capture("07-after-wake.png", "Screen wake resumed countdown", wake_status)
+
+    # Let a normal blackout finish without touching it, to verify the look-back cue
+    # is sent on timeout as well as on manual dismissal.
+    wait_status("Blackout:", 35)
+    vibrations_before_timeout = blackout_vibration_count()
+    capture("07-natural-blackout-end.png", "Blackout finished automatically", wait_status("Next warning", 25))
+    if blackout_vibration_count() != vibrations_before_timeout + 1:
+        raise RuntimeError("Automatic blackout completion must request exactly one vibration")
+    vibration_history = command("shell", "dumpsys", "vibrator_manager")
+    played_cues = [line for line in vibration_history.splitlines()
+                   if PACKAGE in line and "finished" in line and "played: Step=200ms" in line]
+    if len(played_cues) < 3:
+        raise RuntimeError("Android did not confirm the three blackout end vibration effects")
+    print("PASS Blackout end vibration: manual dismissal and automatic completion, no warning vibration", flush=True)
 
     if INCLUDE_REBOOT:
         command("reboot")
@@ -415,6 +439,7 @@ def main():
         "user.blackout_cancel",
         "service.test_step_passed",
         "service.test_passed",
+        "overlay.blackout_end_vibration",
         "user.exception_added",
         "user.exception_removed",
         "service.exception_pause_changed",

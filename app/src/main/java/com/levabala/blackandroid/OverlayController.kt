@@ -3,6 +3,9 @@ package com.levabala.blackandroid
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.VibratorManager
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -92,10 +95,27 @@ class OverlayController(private val context: Context, private val onCancel: () -
     }
 
     fun remove() {
+        val blackoutEnded = currentView != null && currentPhase == Phase.BLACKOUT
         currentView?.let { windowManager.removeViewImmediate(it) }
         currentView = null
         warningText = null
         currentPhase = null
+        if (blackoutEnded) vibrateBlackoutEnd()
+    }
+
+    private fun vibrateBlackoutEnd() {
+        runCatching {
+            val vibrator = context.getSystemService(VibratorManager::class.java).defaultVibrator
+            if (vibrator.hasVibrator()) {
+                vibrator.vibrate(
+                    VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE),
+                    VibrationAttributes.Builder().setUsage(VibrationAttributes.USAGE_NOTIFICATION).build(),
+                )
+                AppLog.info("overlay.blackout_end_vibration")
+            } else {
+                AppLog.info("overlay.blackout_end_vibration_unavailable")
+            }
+        }.onFailure { AppLog.error("overlay.blackout_end_vibration_failed", it) }
     }
 
     private fun dp(value: Int): Int = max(1, (value * density).toInt())
