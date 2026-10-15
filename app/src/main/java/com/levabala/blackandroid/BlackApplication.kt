@@ -35,6 +35,16 @@ class BlackApplication : Application() {
             )
             AppLog.info("app.initialized")
         }
+        ExitDiagnostics.record(this)
+        BackgroundRecovery.schedule(this)
+        registerReceiver(object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+                if (!getSystemService(android.os.PowerManager::class.java).isPowerSaveMode) {
+                    BackgroundRecovery.check(this@BlackApplication, "power_saver_exit")
+                }
+            }
+        }, android.content.IntentFilter(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),
+            android.content.Context.RECEIVER_NOT_EXPORTED)
         UpdateNotifications.clearIfInstalled(this)
         UpdateCheckJobService.schedule(this)
     }

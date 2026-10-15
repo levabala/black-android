@@ -153,6 +153,9 @@ class MainActivity : Activity() {
             AppLog.info("user.exceptions_opened")
             startActivity(Intent(this, ExceptionsActivity::class.java))
         }
+        button(root, getString(R.string.reliability_title)) {
+            startActivity(Intent(this, ReliabilityActivity::class.java))
+        }
         updateStatus = TextView(this).apply {
             text = getString(R.string.main_updates_explanation)
             setPadding(0, dp(18), 0, dp(6))

@@ -11,6 +11,18 @@ class SettingsStore(private val context: Context) {
         get() = prefs.getBoolean("enabled", false)
         set(value) = prefs.edit().putBoolean("enabled", value).apply()
 
+    var recoveryNotified: Boolean
+        get() = prefs.getBoolean("recoveryNotified", false)
+        set(value) = prefs.edit().putBoolean("recoveryNotified", value).apply()
+
+    var lastServiceHeartbeat: Long
+        get() = prefs.getLong("lastServiceHeartbeat", 0L)
+        set(value) = prefs.edit().putLong("lastServiceHeartbeat", value).apply()
+
+    var lastLoggedExit: Long
+        get() = prefs.getLong("lastLoggedExit", 0L)
+        set(value) = prefs.edit().putLong("lastLoggedExit", value).apply()
+
     var settingsPending: Boolean
         get() = prefs.getBoolean("settingsPending", false)
         set(value) = prefs.edit().putBoolean("settingsPending", value).apply()

@@ -44,6 +44,7 @@ class BlackService : Service() {
     private var warningNotificationSent = false
     private var warningNotificationTarget: String? = null
     private var lastHealthLoggedAt = 0L
+    private var lastHeartbeatAt = 0L
     private var lastMicrophoneActive: Boolean? = null
     private var testStep: TestStep? = null
     private var testPassedUntil = 0L
@@ -110,6 +111,10 @@ class BlackService : Service() {
                 return
             }
             val now = SystemClock.elapsedRealtime()
+            if (lastHeartbeatAt == 0L || now - lastHeartbeatAt >= 30_000L) {
+                store.lastServiceHeartbeat = System.currentTimeMillis()
+                lastHeartbeatAt = now
+            }
             updateForegroundException(now)
             val phaseBefore = timer.phase
             timer.tick(now)
@@ -155,12 +160,14 @@ class BlackService : Service() {
             // A foreground-service launch still needs its foreground acknowledgement
             // if a Stop raced with Start or Apply.
             if (intent?.action == ACTION_START || intent?.action == ACTION_UPDATE) {
-                startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                enterForeground()
             }
             AppLog.info("service.stop_command", mapOf(
                 "explicit" to (intent?.action == ACTION_STOP),
             ))
             store.enabled = false
+            running = false
+            BackgroundRecovery.cancel(this)
             handler.removeCallbacks(ticker)
             handler.removeCallbacks(startTestStep)
             overlay.remove()
@@ -178,7 +185,14 @@ class BlackService : Service() {
         }
 
         // startForeground must be called promptly, including after a system restart.
-        startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        if (!enterForeground()) {
+            acknowledge(intent, getString(R.string.recovery_resume_needed))
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        running = true
+        BackgroundRecovery.clearReminder(this)
+        BackgroundRecovery.schedule(this)
         val now = SystemClock.elapsedRealtime()
         if (timer.phase == Phase.STOPPED) {
             val power = getSystemService(PowerManager::class.java)
@@ -248,6 +262,16 @@ class BlackService : Service() {
         render()
         acknowledge(intent)
         return START_STICKY
+    }
+
+    private fun enterForeground(): Boolean = try {
+        startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        true
+    } catch (error: RuntimeException) {
+        running = false
+        if (store.enabled) BackgroundRecovery.startBlocked(this, error)
+        else AppLog.error("service.foreground_start_blocked", error)
+        false
     }
 
     private fun acknowledge(intent: Intent?, error: String? = null) {
@@ -496,6 +520,11 @@ class BlackService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
+        if (store.enabled) {
+            store.status = getString(if (Settings.canDrawOverlays(this))
+                R.string.recovery_waiting else R.string.status_overlay_permission)
+        } else BackgroundRecovery.cancel(this)
         AppLog.info("service.destroyed", mapOf("phase" to timer.phase.name.lowercase()))
         handler.removeCallbacks(ticker)
         handler.removeCallbacks(startTestStep)
@@ -511,6 +540,8 @@ class BlackService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
+        @Volatile var running: Boolean = false
+            private set
         private const val CHANNEL = "black_schedule"
         private const val WARNING_CHANNEL = "black_warning"
         private const val NOTIFICATION_ID = 1
