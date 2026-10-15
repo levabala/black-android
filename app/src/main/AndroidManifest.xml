@@ -42,6 +42,7 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".ExceptionsActivity" android:exported="false" />
         <activity android:name=".ExceptionsTutorialActivity" android:exported="false" />
         <activity android:name=".AppPickerActivity" android:exported="false" />

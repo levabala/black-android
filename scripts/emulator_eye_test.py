@@ -69,6 +69,13 @@ def set_number(index, value):
     hide_keyboard()
 
 
+def finish_settings():
+    tap_text("DONE")
+    wait_node(lambda node: node.attrib.get("class") == "android.widget.Button" and
+              node.attrib.get("text", "").casefold() == "settings",
+              "settings applied and editor closed")
+
+
 def hide_keyboard():
     state = command("shell", "dumpsys", "input_method")
     if "mInputShown=true" in state:
@@ -214,7 +221,7 @@ def main():
         raise RuntimeError(f"Daily update check was not scheduled: {update_job!r}")
     print(f"PASS Daily update check scheduled: {update_job}", flush=True)
 
-    wait_node(lambda node: node.attrib.get("text") == "Interval", "main settings loaded")
+    wait_node(lambda node: node.attrib.get("text") == "SETTINGS", "main controls loaded")
     capture("00-system-theme.png", "System theme", current_status() or "Stopped")
     command("shell", "input", "swipe", "540", "1800", "540", "700", "350")
     wait_node(lambda node: node.attrib.get("text", "").casefold() == "check for updates", "Update control")
@@ -224,8 +231,8 @@ def main():
     # completely above the navigation bar before tapping it.
     command("shell", "input", "swipe", "540", "1800", "540", "1200", "250")
     spinners = [node for node in ui().iter() if node.attrib.get("class") == "android.widget.Spinner"]
-    if len(spinners) != 2:
-        raise RuntimeError(f"Expected appearance and interval selectors, found {len(spinners)}")
+    if len(spinners) != 1:
+        raise RuntimeError(f"Expected one appearance selector, found {len(spinners)}")
     # Appearance is the lower selector now; choosing by position keeps this check tied to the layout.
     appearance_spinner = max(spinners, key=lambda node: center(node)[1])
     appearance_bounds = [int(value) for value in re.findall(r"\d+", appearance_spinner.attrib["bounds"])]
@@ -278,10 +285,35 @@ def main():
     wait_node(lambda node: node.attrib.get("text") == "No app exceptions yet.", "empty exception list")
     command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
 
-    command("shell", "input", "swipe", "540", "700", "540", "1800", "350")
-    command("shell", "input", "swipe", "540", "700", "540", "1800", "350")
+    # Running controls stay independent of the editor. Applying a shorter interval
+    # must preserve the current long countdown, while invalid edits stay local.
+    tap_text("START")
+    original_remaining = status_seconds(wait_status("Next warning"))
+    tap_text("SETTINGS")
+    set_number(0, 1)
+    finish_settings()
+    after_edit = status_seconds(wait_status("Next warning"))
+    if after_edit <= 60 or after_edit > original_remaining:
+        raise RuntimeError(f"Saving reset the countdown: {original_remaining} -> {after_edit}")
+    tap_text("SETTINGS")
+    set_number(1, 0)
+    tap_text("DONE")
+    wait_node(lambda node: node.attrib.get("text") == "Settings", "invalid settings remain in editor")
+    # Numeric error bubbles may consume the first Back; hide it before navigating out.
+    command("shell", "input", "keyevent", "KEYCODE_BACK")
+    time.sleep(0.3)
+    if not any(node.attrib.get("text") == "Discard your unsaved changes?" for node in ui().iter()):
+        command("shell", "input", "keyevent", "KEYCODE_BACK")
+    tap_text("DISCARD")
+    tap_text("STOP")
+    wait_status("Stopped", 5)
+    wait_node(lambda node: node.attrib.get("text") == "START" and node.attrib.get("enabled") == "true",
+              "responsive Start after confirmed Stop")
+    capture("00-main-controls.png", "Stop works after discarded invalid edits; current countdown preserved on save", current_status())
+    tap_text("SETTINGS")
+    wait_node(lambda node: node.attrib.get("text") == "Interval", "settings editor")
     spinners = [node for node in ui().iter() if node.attrib.get("class") == "android.widget.Spinner"]
-    tap_node(min(spinners, key=lambda node: center(node)[1]))
+    tap_node(spinners[0])
     tap_text("Seconds")
     set_number(0, 8)
     set_number(1, 18)
@@ -295,6 +327,8 @@ def main():
         "painted cancel overlay setting")
     if overlay_switch.attrib.get("checked") != "false":
         raise RuntimeError("Painted cancel overlay must default to off")
+    capture("00-settings-editor.png", "Separate settings editor, overlay off by default", current_status())
+    finish_settings()
     tap_text("START")
     capture("01-countdown.png", "Countdown with 8-second interval", wait_status("Next warning"))
     if warning_notification_active():
@@ -329,16 +363,27 @@ def main():
     wait_status_contains("Test passed", 5)
 
     command("shell", "am", "start", "--activity-clear-top", "-n", ACTIVITY)
+    # Stop while editing/persistence-checking so a real warning heads-up cannot
+    # cover Test during UI Automator's slow screen dumps.
+    tap_text("STOP")
+    wait_status("Stopped", 5)
+    tap_text("SETTINGS")
     tap_text("Enable painted cancel overlay")
-    tap_text("SAVE SETTINGS")
+    wait_node(lambda node: node.attrib.get("text") == "Enable painted cancel overlay" and
+              node.attrib.get("checked") == "true", "overlay enabled in draft")
+    finish_settings()
     # Recreate the activity to verify the setting was persisted.
     command("shell", "am", "force-stop", PACKAGE)
     command("shell", "am", "start", "-n", ACTIVITY)
+    tap_text("SETTINGS")
     enabled_switch = wait_node(
         lambda node: node.attrib.get("text") == "Enable painted cancel overlay",
         "saved painted overlay setting")
     if enabled_switch.attrib.get("checked") != "true":
         raise RuntimeError("Painted cancel overlay setting was not persisted")
+    finish_settings()
+    tap_text("START")
+    wait_status("Next warning", 5)
     tap_text("TEST ALL FUNCTIONS")
     warning_status = wait_status("Test 1/3", 8)
     if status_seconds(warning_status) > 10 and warning_notification_active():
@@ -432,6 +477,7 @@ def main():
         "settings.saved",
         "user.schedule_start",
         "service.created",
+        "service.command_acknowledged",
         "service.health",
         "service.phase_changed",
         "service.warning_notification_posted",

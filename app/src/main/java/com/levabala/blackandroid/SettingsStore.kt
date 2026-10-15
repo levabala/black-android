@@ -11,6 +11,14 @@ class SettingsStore(private val context: Context) {
         get() = prefs.getBoolean("enabled", false)
         set(value) = prefs.edit().putBoolean("enabled", value).apply()
 
+    var settingsPending: Boolean
+        get() = prefs.getBoolean("settingsPending", false)
+        set(value) = prefs.edit().putBoolean("settingsPending", value).apply()
+
+    var testing: Boolean
+        get() = prefs.getBoolean("testing", false)
+        set(value) = prefs.edit().putBoolean("testing", value).apply()
+
     var status: String
         get() = when (val saved = prefs.getString("status", null)) {
             null, "Stopped" -> context.getString(R.string.status_stopped)
@@ -70,6 +78,7 @@ class SettingsStore(private val context: Context) {
             .putLong("blackoutMillis", settings.blackoutMillis)
             .putBoolean("pauseForMicrophone", settings.pauseForMicrophone)
             .putBoolean("paintedCancelOverlay", settings.paintedCancelOverlay)
+            .putBoolean("settingsPending", enabled)
             .remove("resetAfterLock")
             .apply()
     }

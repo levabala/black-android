@@ -171,4 +171,60 @@ class SchedulerCoreTest {
         assertEquals(Phase.COUNTDOWN, timer.phase)
         assertEquals(5_000, timer.remainingMillis(36_000))
     }
+    @Test fun settingsChangesPreserveEachActiveDeadlineAndUseNewDurationsNextPhase() {
+        val timer = SchedulerCore(settings)
+        timer.start(0, true, false)
+        timer.updateSettings(settings.copy(intervalMillis = 60_000, warningMillis = 15_000), 5_000)
+        assertEquals(15_000, timer.remainingMillis(5_000))
+        timer.tick(20_000)
+        assertEquals(Phase.WARNING, timer.phase)
+        assertEquals(15_000, timer.remainingMillis(20_000))
+        timer.updateSettings(timer.settings.copy(warningMillis = 30_000, blackoutMillis = 5_000), 21_000)
+        assertEquals(14_000, timer.remainingMillis(21_000))
+        timer.tick(35_000)
+        assertEquals(Phase.BLACKOUT, timer.phase)
+        assertEquals(5_000, timer.remainingMillis(35_000))
+        timer.updateSettings(timer.settings.copy(blackoutMillis = 10_000), 36_000)
+        assertEquals(4_000, timer.remainingMillis(36_000))
+        timer.tick(40_000)
+        assertEquals(Phase.COUNTDOWN, timer.phase)
+        assertEquals(60_000, timer.remainingMillis(40_000))
+    }
+
+    @Test fun settingsDoNotResetPausedOrLockedRemainingTime() {
+        for (pause in listOf("microphone", "exception", "lock")) {
+            val timer = SchedulerCore(settings)
+            timer.start(0, true, false)
+            when (pause) {
+                "microphone" -> timer.setMicrophoneActive(true, 5_000)
+                "exception" -> timer.setExceptionActive(true, 5_000)
+                else -> timer.setScreenAvailable(false, 5_000)
+            }
+            val phase = timer.phase
+            timer.updateSettings(settings.copy(intervalMillis = 60_000, paintedCancelOverlay = true), 6_000)
+            assertEquals(phase, timer.phase)
+            assertEquals(15_000, timer.remainingMillis(6_000))
+            when (pause) {
+                "microphone" -> timer.setMicrophoneActive(false, 10_000)
+                "exception" -> timer.setExceptionActive(false, 10_000)
+                else -> timer.setScreenAvailable(true, 10_000)
+            }
+            assertEquals(Phase.COUNTDOWN, timer.phase)
+            assertEquals(15_000, timer.remainingMillis(10_000))
+        }
+    }
+
+    @Test fun changingMicrophonePolicyReevaluatesAlreadyActiveMicrophone() {
+        val timer = SchedulerCore(settings.copy(pauseForMicrophone = false))
+        timer.start(0, true, true)
+        timer.updateSettings(settings, 5_000)
+        assertEquals(Phase.MIC_PAUSED, timer.phase)
+        assertEquals(15_000, timer.remainingMillis(5_000))
+        timer.updateSettings(settings.copy(pauseForMicrophone = false), 10_000)
+        assertEquals(Phase.COUNTDOWN, timer.phase)
+        assertEquals(15_000, timer.remainingMillis(10_000))
+        timer.updateSettings(settings.copy(pauseForMicrophone = false), 12_000)
+        assertEquals(13_000, timer.remainingMillis(12_000))
+    }
+
 }

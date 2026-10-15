@@ -74,16 +74,22 @@ class SchedulerCore(initialSettings: BlackSettings) {
     }
 
     fun updateSettings(newSettings: BlackSettings, now: Long) {
+        val wasMicrophonePaused = settings.pauseForMicrophone && microphoneActive
         settings = newSettings
-        if (phase == Phase.STOPPED) return
-        start(now, screenAvailable, microphoneActive, exceptionActive)
+        val shouldPause = settings.pauseForMicrophone && microphoneActive
+        if (phase != Phase.STOPPED && wasMicrophonePaused != shouldPause) {
+            applyMicrophonePause(shouldPause, now)
+        }
     }
 
     fun setMicrophoneActive(active: Boolean, now: Long) {
         if (microphoneActive == active) return
         microphoneActive = active
         if (phase == Phase.STOPPED || !settings.pauseForMicrophone) return
+        applyMicrophonePause(active, now)
+    }
 
+    private fun applyMicrophonePause(active: Boolean, now: Long) {
         if (active) {
             if (phase == Phase.APP_PAUSED &&
                 (exceptionResumePhase == Phase.WARNING || exceptionResumePhase == Phase.BLACKOUT)) {

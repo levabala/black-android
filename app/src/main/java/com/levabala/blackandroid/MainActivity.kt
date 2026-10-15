@@ -4,27 +4,22 @@ import android.Manifest
 import android.app.Activity
 import android.app.ActivityOptions
 import android.app.PendingIntent
+import android.content.SharedPreferences
 import android.content.Context
 import android.content.Intent
-import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
-import android.text.InputType
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.View
 import android.widget.AdapterView
 import android.widget.Button
 import android.widget.ArrayAdapter
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
@@ -33,45 +28,99 @@ class MainActivity : Activity() {
     private lateinit var store: SettingsStore
     private lateinit var status: TextView
     private lateinit var startStop: Button
-    private lateinit var interval: EditText
-    private lateinit var intervalUnit: Spinner
-    private lateinit var warning: EditText
-    private lateinit var blackout: EditText
-    private lateinit var pauseMic: Switch
-    private lateinit var paintedCancelOverlay: Switch
+    private lateinit var summary: TextView
+    private lateinit var testButton: Button
+    private lateinit var testHelp: TextView
+    private var pendingAction: String? = null
+    private var actionGeneration = 0
+    private var pendingStartPermission = false
+    private var pendingTestPermission = false
+    private val stateListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> refreshControls() }
     private lateinit var updateButton: Button
     private lateinit var updateStatus: TextView
     private var pendingInstallerPermission = false
-    private val handler = Handler(Looper.getMainLooper())
-    private val refresh = object : Runnable {
-        override fun run() {
-            status.text = store.status
-            startStop.text = getString(if (store.enabled) R.string.action_stop else R.string.action_start)
-            handler.postDelayed(this, 500)
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(themedContext(newBase))
+    }
+
+    private fun refreshControls() {
+        if (!::startStop.isInitialized) return
+        status.text = when (pendingAction) {
+            BlackService.ACTION_START -> getString(R.string.status_starting)
+            BlackService.ACTION_STOP -> getString(R.string.status_stopping)
+            BlackService.ACTION_TEST -> getString(R.string.status_test_starting)
+            else -> store.status
+        }
+        startStop.text = getString(if (store.enabled) R.string.action_stop else R.string.action_start)
+        startStop.isEnabled = pendingAction != BlackService.ACTION_STOP &&
+            (pendingAction == null || store.enabled)
+        testButton.isEnabled = store.enabled && !store.testing && pendingAction == null
+        testHelp.text = getString(when {
+            !store.enabled -> R.string.main_test_start_first
+            store.testing -> R.string.main_test_running
+            else -> R.string.main_test_explanation
+        })
+        val saved = store.load()
+        summary.text = getString(R.string.main_settings_summary,
+            BlackService.formatTime(saved.intervalMillis),
+            BlackService.formatTime(saved.warningMillis),
+            BlackService.formatTime(saved.blackoutMillis)) +
+            if (store.settingsPending) "\n" + getString(R.string.settings_waiting) else ""
+    }
+
+    private fun sendAction(action: String) {
+        if (pendingAction != null && action != BlackService.ACTION_STOP) return
+        val generation = ++actionGeneration
+        val wasEnabled = store.enabled
+        pendingAction = action
+        if (action == BlackService.ACTION_START) store.enabled = true
+        refreshControls()
+        ServiceCommands.send(this, action) { error ->
+            if (isDestroyed || generation != actionGeneration) return@send
+            pendingAction = null
+            if (error != null) {
+                if (action == BlackService.ACTION_START) store.enabled = wasEnabled
+                Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+            }
+            refreshControls()
+            if (error == null && action == BlackService.ACTION_TEST) moveTaskToBack(true)
         }
     }
 
-    override fun attachBaseContext(newBase: Context) {
-        val night = when (SettingsStore(newBase).appearance) {
-            Appearance.SYSTEM -> null
-            Appearance.LIGHT -> Configuration.UI_MODE_NIGHT_NO
-            Appearance.DARK -> Configuration.UI_MODE_NIGHT_YES
+    private fun startSchedule() {
+        if (!Settings.canDrawOverlays(this)) {
+            pendingStartPermission = true
+            AppLog.info("permission.overlay_requested")
+            Toast.makeText(this, R.string.main_overlay_permission_request, Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            return
         }
-        if (night == null) {
-            super.attachBaseContext(newBase)
-        } else {
-            val config = Configuration(newBase.resources.configuration).apply {
-                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
-            }
-            super.attachBaseContext(newBase.createConfigurationContext(config))
+        AppLog.info("user.schedule_start")
+        sendAction(BlackService.ACTION_START)
+        requestNotifications()
+    }
+
+    private fun startTest() {
+        if (!store.enabled) {
+            Toast.makeText(this, R.string.main_test_start_first, Toast.LENGTH_SHORT).show()
+            return
         }
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            pendingTestPermission = true
+            requestNotifications()
+            return
+        }
+        AppLog.info("user.test_now")
+        sendAction(BlackService.ACTION_TEST)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingInstallerPermission = savedInstanceState?.getBoolean("pendingInstallerPermission") ?: false
         store = SettingsStore(this)
-        val saved = store.load()
+        pendingStartPermission = savedInstanceState?.getBoolean("pendingStartPermission") ?: false
+        pendingTestPermission = savedInstanceState?.getBoolean("pendingTestPermission") ?: false
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(8), dp(24), dp(8))
@@ -84,71 +133,22 @@ class MainActivity : Activity() {
         status = TextView(this).apply { textSize = 18f; setPadding(0, dp(12), 0, dp(18)) }
         root.addView(status)
 
-        val intervalIsMinutes = saved.intervalMillis % 60_000L == 0L
-        interval = numberField(root, getString(R.string.main_interval), if (intervalIsMinutes) saved.intervalMillis / 60_000 else saved.intervalMillis / 1_000)
-        intervalUnit = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf(getString(R.string.main_minutes), getString(R.string.main_seconds)))
-            setSelection(if (intervalIsMinutes) 0 else 1)
-        }
-        root.addView(intervalUnit)
-        warning = numberField(root, getString(R.string.main_warning_seconds), saved.warningMillis / 1_000)
-        blackout = numberField(root, getString(R.string.main_blackout_seconds), saved.blackoutMillis / 1_000)
-        pauseMic = Switch(this).apply { text = getString(R.string.main_pause_microphone); isChecked = saved.pauseForMicrophone }
-        root.addView(pauseMic)
-        paintedCancelOverlay = Switch(this).apply {
-            text = getString(R.string.main_painted_cancel_overlay)
-            isChecked = saved.paintedCancelOverlay
-        }
-        root.addView(paintedCancelOverlay)
-
-        val explanation = TextView(this).apply {
-            text = getString(R.string.main_blackout_explanation)
-            setPadding(0, dp(18), 0, dp(18))
-        }
-        root.addView(explanation)
-
         startStop = button(root, getString(R.string.action_start)) {
             if (store.enabled) {
                 AppLog.info("user.schedule_stop")
-                store.enabled = false
-                store.status = getString(R.string.status_stopped)
-                startService(BlackService.command(this, BlackService.ACTION_STOP))
-            } else if (saveSettings()) {
-                if (!Settings.canDrawOverlays(this)) {
-                    AppLog.warn("permission.overlay_requested")
-                    Toast.makeText(this, R.string.main_overlay_permission_request, Toast.LENGTH_LONG).show()
-                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:$packageName")))
-                    return@button
-                }
-                store.enabled = true
-                store.status = getString(R.string.status_starting)
-                AppLog.info("user.schedule_start")
-                startForegroundService(BlackService.command(this, BlackService.ACTION_START))
-                requestNotifications()
-            }
+                sendAction(BlackService.ACTION_STOP)
+            } else startSchedule()
         }
-        button(root, getString(R.string.main_save_settings)) {
-            if (saveSettings() && store.enabled) {
-                AppLog.info("user.schedule_settings_applied")
-                startService(BlackService.command(this, BlackService.ACTION_UPDATE))
-            }
+        summary = TextView(this).apply { setPadding(0, dp(16), 0, dp(8)); textSize = 16f }
+        root.addView(summary)
+        button(root, getString(R.string.main_settings)) {
+            AppLog.info("user.settings_opened")
+            startActivity(Intent(this, SettingsActivity::class.java))
         }
-        button(root, getString(R.string.main_test_all)) {
-            if (!store.enabled) {
-                AppLog.warn("user.test_rejected", mapOf("reason" to "schedule_stopped"))
-                Toast.makeText(this, R.string.main_test_start_first, Toast.LENGTH_SHORT).show()
-            } else {
-                AppLog.info("user.test_now")
-                startService(BlackService.command(this, BlackService.ACTION_TEST))
-                moveTaskToBack(true)
-            }
-        }
-        root.addView(TextView(this).apply {
-            text = getString(R.string.main_test_explanation)
-            setPadding(0, 0, 0, dp(8))
-        })
+        testButton = button(root, getString(R.string.main_test_all)) { startTest() }
+        testHelp = TextView(this).apply { setPadding(0, 0, 0, dp(16)) }
+        root.addView(testHelp)
+        refreshControls()
         button(root, getString(R.string.main_app_exceptions)) {
             AppLog.info("user.exceptions_opened")
             startActivity(Intent(this, ExceptionsActivity::class.java))
@@ -294,41 +294,9 @@ class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("pendingInstallerPermission", pendingInstallerPermission)
+        outState.putBoolean("pendingStartPermission", pendingStartPermission)
+        outState.putBoolean("pendingTestPermission", pendingTestPermission)
         super.onSaveInstanceState(outState)
-    }
-
-    private fun saveSettings(): Boolean {
-        val intervalValue = interval.text.toString().toLongOrNull()
-        val warningSeconds = warning.text.toString().toLongOrNull()
-        val blackoutSeconds = blackout.text.toString().toLongOrNull()
-        val intervalLimit = if (intervalUnit.selectedItemPosition == 0) 1440L else 86_400L
-        if (intervalValue == null || intervalValue !in 1..intervalLimit || warningSeconds == null || warningSeconds !in 10..300 ||
-            blackoutSeconds == null || blackoutSeconds !in 1..300) {
-            AppLog.warn("settings.validation_failed")
-            Toast.makeText(this, R.string.main_settings_validation, Toast.LENGTH_LONG).show()
-            return false
-        }
-        val intervalMillis = intervalValue * if (intervalUnit.selectedItemPosition == 0) 60_000L else 1_000L
-        store.save(BlackSettings(intervalMillis, warningSeconds * 1_000,
-            blackoutSeconds * 1_000, pauseMic.isChecked, paintedCancelOverlay.isChecked))
-        AppLog.info("settings.saved", mapOf(
-            "interval_ms" to intervalMillis,
-            "warning_ms" to warningSeconds * 1_000,
-            "blackout_ms" to blackoutSeconds * 1_000,
-            "pause_for_microphone" to pauseMic.isChecked,
-            "painted_cancel_overlay" to paintedCancelOverlay.isChecked,
-        ))
-        return true
-    }
-
-    private fun numberField(parent: LinearLayout, label: String, value: Long): EditText {
-        parent.addView(TextView(this).apply { text = label; setPadding(0, dp(12), 0, 0) })
-        return EditText(this).also {
-            it.inputType = InputType.TYPE_CLASS_NUMBER
-            it.setSingleLine(true)
-            it.setText(value.toString())
-            parent.addView(it, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        }
     }
 
     private fun button(parent: LinearLayout, title: String, click: () -> Unit): Button =
@@ -355,7 +323,13 @@ class MainActivity : Activity() {
             AppLog.info("service.recovery_requested", mapOf("source" to "activity_resume"))
             startForegroundService(BlackService.command(this, BlackService.ACTION_START))
         }
-        handler.post(refresh)
+        getSharedPreferences("black", MODE_PRIVATE).registerOnSharedPreferenceChangeListener(stateListener)
+        refreshControls()
+        if (pendingStartPermission) {
+            pendingStartPermission = false
+            if (Settings.canDrawOverlays(this)) startSchedule()
+            else Toast.makeText(this, R.string.status_overlay_permission, Toast.LENGTH_LONG).show()
+        }
         store.updateResult?.let {
             updateStatus.text = it
             updateButton.isEnabled = true
@@ -375,8 +349,17 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
-        handler.removeCallbacks(refresh)
+        getSharedPreferences("black", MODE_PRIVATE).unregisterOnSharedPreferenceChangeListener(stateListener)
         super.onPause()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1 && pendingTestPermission) {
+            pendingTestPermission = false
+            if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) startTest()
+            else Toast.makeText(this, R.string.main_test_notifications, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()

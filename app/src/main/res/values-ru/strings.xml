@@ -41,7 +41,7 @@
     <string name="main_blackout_seconds">Затемнение (секунды)</string>
     <string name="main_pause_microphone">Пауза, пока используется микрофон</string>
     <string name="main_blackout_explanation">Затемнение закрывает содержимое приложений. Android может оставить видимыми системные панели и клавиатуру. Чтобы отменить затемнение, быстро нажмите на экран три раза.</string>
-    <string name="main_overlay_permission_request">Разрешите Black показываться поверх других приложений, затем снова нажмите «Запустить»</string>
+    <string name="main_overlay_permission_request">Разрешите Black показываться поверх других приложений. Таймер запустится, когда вы вернётесь.</string>
     <string name="main_save_settings">Сохранить настройки</string>
     <string name="main_test_all">Проверить все функции</string>
     <string name="main_test_start_first">Сначала запустите таймер</string>
@@ -116,4 +116,23 @@
     <string name="tutorial_next">Далее</string>
     <string name="tutorial_done">Готово</string>
     <string name="main_painted_cancel_overlay">Показывать панель отмены поверх приложений</string>
+    <string name="status_stopping">Остановка…</string>
+    <string name="status_test_starting">Запуск проверки…</string>
+    <string name="main_settings">Настройки</string>
+    <string name="main_settings_summary">Интервал: %1$s · Предупреждение: %2$s · Затемнение: %3$s</string>
+    <string name="main_test_running">Проверка запущена. Следуйте указаниям в уведомлении или нажмите «Стоп», чтобы завершить её.</string>
+    <string name="main_test_notifications">Для проверки включите уведомления о затемнении в настройках Android.</string>
+    <string name="main_test_paused">Проверку пока нельзя запустить: %1$s</string>
+    <string name="settings_timing_explanation">Текущий таймер сохранит оставшееся время. Новая длительность применяется при следующем запуске отсчёта, предупреждения или затемнения. Переключатели применяются по нажатию «Готово».</string>
+    <string name="settings_discard_question">Отменить несохранённые изменения?</string>
+    <string name="settings_keep_editing">Продолжить редактирование</string>
+    <string name="settings_discard">Отменить изменения</string>
+    <string name="settings_range_error">Введите число от %1$d до %2$d</string>
+    <string name="settings_saving">Сохранение…</string>
+    <string name="settings_updated">Настройки применены. Текущий таймер сохранён.</string>
+    <string name="settings_saved">Настройки сохранены.</string>
+    <string name="action_timeout">Служба не ответила. Проверьте таймер и попробуйте ещё раз.</string>
+    <string name="action_failed">Не удалось выполнить действие. Попробуйте ещё раз.</string>
+    <string name="settings_waiting">Настройки сохранены; ожидается применение службой.</string>
+    <string name="settings_apply_failed">Настройки сохранены, но не применены: %1$s Нажмите «Готово», чтобы повторить.</string>
 </resources>

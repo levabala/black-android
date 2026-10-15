@@ -18,6 +18,8 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.os.Bundle
+import android.os.ResultReceiver
 import android.provider.Settings
 import kotlin.math.ceil
 
@@ -122,6 +124,8 @@ class BlackService : Service() {
         super.onCreate()
         store = SettingsStore(this)
         timer = SchedulerCore(store.load())
+        store.settingsPending = false
+        store.testing = false
         overlay = OverlayController(this) { cancel() }
         audio = getSystemService(AudioManager::class.java)
         notifications = getSystemService(NotificationManager::class.java)
@@ -148,12 +152,28 @@ class BlackService : Service() {
             "enabled" to store.enabled,
         ))
         if (intent?.action == ACTION_STOP || !store.enabled) {
+            // A foreground-service launch still needs its foreground acknowledgement
+            // if a Stop raced with Start or Apply.
+            if (intent?.action == ACTION_START || intent?.action == ACTION_UPDATE) {
+                startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            }
             AppLog.info("service.stop_command", mapOf(
                 "explicit" to (intent?.action == ACTION_STOP),
             ))
             store.enabled = false
+            handler.removeCallbacks(ticker)
+            handler.removeCallbacks(startTestStep)
+            overlay.remove()
+            notifications.cancel(WARNING_NOTIFICATION_ID)
+            timer.stop()
+            testStep = null
+            store.testing = false
             store.status = getString(R.string.status_stopped)
-            stopSelf()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf(startId)
+            store.settingsPending = false
+            acknowledge(intent, if (intent?.action == ACTION_TEST || intent?.action == ACTION_START)
+                getString(R.string.main_test_start_first) else null)
             return START_NOT_STICKY
         }
 
@@ -180,15 +200,31 @@ class BlackService : Service() {
         }
         when (intent?.action) {
             ACTION_UPDATE -> {
-                endTest(now, passed = false)
                 timer.updateSettings(store.load(), now)
+                store.settingsPending = false
+                if (testStep == TestStep.WARNING_CANCEL && !timer.settings.paintedCancelOverlay) {
+                    testStep = TestStep.BLACKOUT_CANCEL
+                }
                 AppLog.info("service.settings_updated")
             }
             ACTION_CANCEL -> {
                 cancel(CancelSource.NOTIFICATION)
             }
             ACTION_TEST -> {
-                startGuidedTest(now)
+                updateForegroundException(now)
+                val error = when {
+                    !notifications.areNotificationsEnabled() ||
+                        notifications.getNotificationChannel(WARNING_CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE ->
+                        getString(R.string.main_test_notifications)
+                    timer.phase == Phase.MIC_PAUSED || timer.phase == Phase.APP_PAUSED || timer.phase == Phase.LOCKED ->
+                        getString(R.string.main_test_paused, store.status)
+                    else -> null
+                }
+                if (error != null) {
+                    acknowledge(intent, error)
+                    return START_STICKY
+                }
+                if (testStep == null) startGuidedTest(now)
             }
             ACTION_ADD_EXCEPTION -> {
                 val targetPackage = intent.getStringExtra(EXTRA_PACKAGE_NAME)
@@ -210,7 +246,13 @@ class BlackService : Service() {
             }
         }
         render()
+        acknowledge(intent)
         return START_STICKY
+    }
+
+    private fun acknowledge(intent: Intent?, error: String? = null) {
+        intent?.getParcelableExtra(ServiceCommands.RESULT_RECEIVER, ResultReceiver::class.java)
+            ?.send(0, Bundle().apply { if (error != null) putString(ServiceCommands.ERROR, error) })
     }
 
     private fun cancel() {
@@ -257,6 +299,7 @@ class BlackService : Service() {
         handler.removeCallbacks(startTestStep)
         testPassedUntil = 0
         testStep = TestStep.NOTIFICATION_CANCEL
+        store.testing = true
         if (timer.phase == Phase.WARNING || timer.phase == Phase.BLACKOUT) timer.cancel(now)
         if (timer.phase == Phase.COUNTDOWN) {
             timer.testNow(now, TEST_WARNING_MILLIS, TEST_BLACKOUT_MILLIS)
@@ -295,6 +338,7 @@ class BlackService : Service() {
         handler.removeCallbacks(startTestStep)
         AppLog.info(if (passed) "service.test_passed" else "service.test_stopped")
         testStep = null
+        store.testing = false
         if (passed) testPassedUntil = now + TEST_PASSED_STATUS_MILLIS
     }
 
@@ -460,6 +504,7 @@ class BlackService : Service() {
         overlay.remove()
         notifications.cancel(WARNING_NOTIFICATION_ID)
         timer.stop()
+        store.testing = false
         super.onDestroy()
     }
 
